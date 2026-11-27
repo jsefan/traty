@@ -195,7 +195,7 @@ td.r,th.r{text-align:right;padding-right:0;white-space:nowrap}
 
 <script>
 "use strict";
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.4.1";
 const KEY = "traty-v1";
 const DEFAULT_CATS = [
   ["food", "🛒", "Продукты"], ["cafe", "🍜", "Кафе"], ["transport", "🛵", "Транспорт"],
@@ -1092,6 +1092,17 @@ document.addEventListener("pointerover", (e) => {
 });
 
 render();
+
+// iOS resumes a home-screen app where it was left (another month, a filter, or a stale month after midnight
+// on the 1st). Coming back after more than a minute away: show the current month again.
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+  if (!hiddenAt || Date.now() - hiddenAt < 60e3 || !$("#sheet").hidden) return;
+  U.month = today().slice(0, 7); U.cat = null; U.name = null; U.tip = null;
+  if (U.view === "more") U.view = "list";
+  render();
+});
 // Updates (same as Подход): check for a new version whenever the app comes to the screen;
 // when it has installed, reload once. If a form is open, wait until it is closed so nothing typed is lost.
 let updatePending = false;
