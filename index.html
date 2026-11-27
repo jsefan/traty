@@ -195,7 +195,7 @@ td.r,th.r{text-align:right;padding-right:0;white-space:nowrap}
 
 <script>
 "use strict";
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.5.0";
 const KEY = "traty-v1";
 const DEFAULT_CATS = [
   ["food", "🛒", "Продукты"], ["cafe", "🍜", "Кафе"], ["transport", "🛵", "Транспорт"],
@@ -972,7 +972,7 @@ function renderImport() {
         ${take.length > 8 ? `<p class="hint">…и ещё ${take.length - 8}</p>` : ""}`;
     }
   }
-  h += `<div class="stack"><button class="btn primary block" data-act="impdo" ${take.length ? "" : "disabled"}>Загрузить ${take.length} ${plural(take.length, "покупку", "покупки", "покупок")}</button>
+  h += `<div class="stack"><button class="btn primary block" data-act="impdo" ${take.length || (IMP.skipDup && R.ok.some((o) => o.dup && o.cat)) ? "" : "disabled"}>Загрузить ${take.length} ${plural(take.length, "покупку", "покупки", "покупок")}</button>
     <button class="btn block" data-act="import">Выбрать другую таблицу</button></div>`;
   if (card) { card.innerHTML = h; card.scrollTop = scroll; } else openSheet(h, "tall");
 }
@@ -989,25 +989,34 @@ function onImportChange(el) {
   else if (k === "wide") { const i = +el.value; IMP.wide = el.checked ? [...IMP.wide, i].sort((a, b) => a - b) : IMP.wide.filter((x) => x !== i); }
   renderImport();
 }
+// Icons for categories that a table creates, by name
+const NEW_CAT_ICON = { "красота": "💅", "мото": "🏍️", "мотоцикл": "🏍️", "спорт": "🏋️", "одежда": "👕", "подарки": "🎁", "дети": "🧸", "образование": "📚", "документы": "📄", "кафе": "🍜", "продукты": "🛒", "такси": "🚕", "бензин": "⛽", "красота и уход": "💅", "животные": "🐈" };
 function doImport() {
   const R = computeImport();
   const take = R.ok.filter((o) => !(IMP.skipDup && o.dup));
-  if (!take.length) return;
+  const dupsWithCat = IMP.skipDup && R.ok.some((o) => o.dup && o.cat);
+  if (!take.length && !dupsWithCat) return;
   const byName = new Map(S.cats.map((c) => [c.n.toLowerCase(), c.id]));
   const catId = (o) => {
     if (!o.cat) return o.catId;
     const k = o.cat.toLowerCase();
-    if (!byName.has(k)) { const id = "c" + uid(); S.cats.push({ id, e: "🏷️", n: o.cat }); byName.set(k, id); }
+    if (!byName.has(k)) { const id = "c" + uid(); S.cats.push({ id, e: NEW_CAT_ICON[k] || "🏷️", n: o.cat }); byName.set(k, id); }
     return byName.get(k);
   };
+  // Rows skipped as already present: if the table names a category and the existing purchase sits in "Другое", move it
+  let moved = 0;
+  if (IMP.skipDup) R.ok.filter((o) => o.dup && o.cat).forEach((o) => {
+    const ex = S.items.find((i) => i.c === "other" && i.d === o.d && i.a === o.a && (i.n || "").toLowerCase() === o.n.toLowerCase());
+    if (ex) { ex.c = catId(o); moved++; }
+  });
   const id = uid(), now = Date.now();
   take.forEach((o, n) => S.items.push({ id: uid() + n, d: o.d, p: o.p, q: o.q, a: o.a, c: catId(o), n: o.n, t: now + n, imp: id }));
-  S.imports.push({ id, ts: now, name: IMP.name, count: take.length });
+  if (take.length) S.imports.push({ id, ts: now, name: IMP.name, count: take.length });
   save();
-  U.month = take.map((o) => o.d).sort().pop().slice(0, 7);
+  if (take.length) U.month = take.map((o) => o.d).sort().pop().slice(0, 7);
   U.view = "list"; U.cat = null; U.name = null;
   closeSheet(); render();
-  toast(`Загружено: ${take.length} ${plural(take.length, "покупка", "покупки", "покупок")}`);
+  toast(`Загружено: ${take.length} ${plural(take.length, "покупка", "покупки", "покупок")}${moved ? `, ${moved} уже внесённых получили категорию` : ""}`);
 }
 
 // ---------- Toast ----------
