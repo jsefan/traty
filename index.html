@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Траты</title>
+<meta name="description" content="Учёт трат в батах">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Траты">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0F1114">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#0F1114; --surface:#181B20; --sunk:#22262D; --line:#2B3038;
+  --ink:#F2F4F7; --muted:#8D95A3; --accent:#3DDC97; --accent-hi:#8FF0C4; --accent-ink:#052414;
+  --accent-soft:rgba(61,220,151,.14); --warn:#FF6B6B; --warn-soft:rgba(255,107,107,.12);
+  --r:14px; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);margin:0}
+html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+body{color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Inter,sans-serif;
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(100px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+body.locked{overflow:hidden}
+[hidden]{display:none!important}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;min-width:0}
+input[type=date]{-webkit-appearance:none;appearance:none;min-height:46px;text-align:left}
+select{-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+textarea{min-height:110px;resize:vertical;font-size:14px}
+.app{max-width:620px;margin:0 auto}
+h1,h2,h3{margin:0;letter-spacing:-.01em}
+h2{font-size:20px}
+h3{font-size:13px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:24px 4px 8px}
+
+/* Header */
+.top{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;padding:14px 0 12px}
+.top::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:env(safe-area-inset-top,0px);background:var(--bg)}
+.arrow{width:42px;height:42px;border-radius:50%;background:var(--surface);font-size:22px;display:grid;place-items:center;flex:none;color:var(--muted)}
+.period{flex:1;text-align:center;min-width:0}
+.plabel{color:var(--muted);font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ptotal{font-size:34px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+.title{font-size:28px;padding:6px 4px}
+
+/* Tabs + FAB */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(15,17,20,.92);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabs button{flex:1;max-width:160px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);padding:5px 0}
+.tabs button[aria-current=page]{color:var(--accent)}
+.tabs svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fab{position:fixed;right:max(20px,calc(50% - 290px));bottom:calc(78px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border-radius:50%;background:var(--accent);color:var(--accent-ink);box-shadow:0 8px 24px rgba(0,0,0,.5);display:grid;place-items:center;z-index:6}
+.fab svg{width:28px;height:28px;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+.fab:active{transform:scale(.95)}
+
+/* List */
+.card{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.day{margin-top:16px}
+.dayh{display:flex;justify-content:space-between;color:var(--muted);font-size:13px;font-weight:600;padding:0 4px 6px}
+.item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:11px 14px;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item:active,.crow:active,.mrow:active{background:var(--sunk)}
+.ie{width:38px;height:38px;border-radius:11px;background:var(--sunk);display:grid;place-items:center;font-size:19px;flex:none}
+.it{flex:1;min-width:0;display:flex;flex-direction:column}
+.in{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inote{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ia{font-weight:650;white-space:nowrap}
+.filter{display:flex;align-items:center;gap:8px;margin-top:4px}
+.pill{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:7px 8px 7px 14px;font-weight:600;font-size:14px}
+.pill button{width:22px;height:22px;border-radius:50%;background:rgba(61,220,151,.2);font-size:12px;display:grid;place-items:center}
+.empty{text-align:center;color:var(--muted);padding:48px 20px}
+.empty p{margin:0 0 16px}
+
+/* Buttons */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 18px;border-radius:12px;background:var(--sunk);font-weight:650}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.danger{background:var(--warn-soft);color:var(--warn)}
+.btn.block{width:100%}
+.btn:disabled{opacity:.4}
+.btn.small{min-height:36px;padding:0 12px;font-size:14px;border-radius:9px}
+.stack{display:grid;gap:10px;margin-top:16px}
+
+/* Sheet */
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;animation:fade .15s}
+.sheet-card{background:var(--surface);width:100%;max-width:620px;max-height:94dvh;overflow:auto;-webkit-overflow-scrolling:touch;border-radius:20px 20px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+.sheet-card.tall{height:94dvh}
+@keyframes fade{from{opacity:0}}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+.shead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.x{width:34px;height:34px;border-radius:50%;background:var(--sunk);color:var(--muted);display:grid;place-items:center;font-size:14px;flex:none}
+.amt{display:flex;align-items:baseline;justify-content:center;gap:6px;padding:10px 0 14px}
+.amt input{background:none;border:0;font-size:44px;font-weight:750;text-align:center;padding:0;width:6.5ch;letter-spacing:-.02em}
+.amt input:focus{outline:0}
+.amt span{font-size:30px;color:var(--muted);font-weight:600}
+.amt.bad input{color:var(--warn)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{background:var(--sunk);border-radius:999px;padding:8px 13px;font-size:14px;font-weight:550;border:1px solid transparent}
+.chips button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:10px;margin-top:14px}
+.field{display:grid;gap:6px;font-size:13px;color:var(--muted);font-weight:600}
+.field>*:not(span){color:var(--ink);font-weight:400}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{color:var(--muted);font-size:14px;margin:4px 0 0}
+.check{display:flex;align-items:center;gap:10px;font-size:15px;padding:6px 0}
+.check input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+
+/* Stats */
+.seg{display:flex;background:var(--surface);border-radius:11px;padding:3px}
+.seg button{flex:1;padding:8px;border-radius:9px;font-weight:600;color:var(--muted);font-size:14px}
+.seg button[aria-pressed=true]{background:var(--sunk);color:var(--ink)}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.kpi{background:var(--surface);border-radius:var(--r);padding:12px 14px}
+.kpi b{display:block;font-size:20px;font-weight:700}
+.kpi span{color:var(--muted);font-size:13px}
+.chart{background:var(--surface);border-radius:var(--r);padding:12px 14px 10px}
+.cap{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:10px;min-height:18px}
+.cap b{color:var(--ink);font-weight:650}
+.cols{display:flex;align-items:flex-end;gap:2px;height:120px;border-bottom:1px solid var(--line)}
+.cols button{flex:1;height:100%;display:flex;align-items:flex-end;min-width:0}
+.cols i{display:block;width:100%;background:var(--accent);border-radius:4px 4px 0 0}
+.cols button.on i{background:var(--accent-hi)}
+.cols button.zero i{height:2px!important;background:var(--line);border-radius:1px}
+.axis{display:flex;gap:2px;color:var(--muted);font-size:11px;margin-top:5px}
+.axis span{flex:1;text-align:center;white-space:nowrap;overflow:visible;min-width:0}
+.crow{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:11px 14px;border-top:1px solid var(--line);width:100%;text-align:left}
+.crow:first-child{border-top:0}
+.crow .ie{grid-row:1/3}
+.cname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cname small{color:var(--muted);font-weight:500;margin-left:6px;font-size:13px}
+.cbar{grid-column:2/4;height:6px;background:var(--sunk);border-radius:3px;overflow:hidden}
+.cbar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.tview{margin-top:10px}
+.tview summary{color:var(--muted);font-size:13px;padding:6px 4px;cursor:pointer}
+
+/* More */
+.mrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 14px;border-top:1px solid var(--line);min-height:52px}
+.mrow:first-child{border-top:0}
+.mrow .grow{flex:1;min-width:0}
+.mrow .sub{display:block;color:var(--muted);font-size:13px}
+.mrow .chev{color:var(--muted)}
+.foot{color:var(--muted);font-size:13px;text-align:center;margin:28px 0 8px}
+
+/* Import */
+.box{background:var(--sunk);border-radius:12px;padding:12px 14px;margin-top:14px}
+.box p{margin:0}
+.box p+p{margin-top:6px}
+.sum{font-size:17px;font-weight:650}
+.warnbox{background:var(--warn-soft);color:#FFB3B3}
+.warnbox summary{cursor:pointer;font-weight:600}
+.warnbox ul{margin:8px 0 0;padding-left:18px;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+th{text-align:left;color:var(--muted);font-weight:600;padding:6px 6px 6px 0;border-bottom:1px solid var(--line)}
+td{padding:7px 6px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+td.r,th.r{text-align:right;padding-right:0;white-space:nowrap}
+.colsel{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+
+/* Toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));z-index:30;background:#2F343C;color:var(--ink);border-radius:12px;padding:10px 12px 10px 16px;display:flex;gap:14px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:calc(100% - 32px);font-size:14px;animation:fade .15s}
+.toast button{color:var(--accent);font-weight:700;padding:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top" id="top"></header>
+  <main id="main"></main>
+</div>
+
+<button class="fab" id="fab" data-act="add" aria-label="Добавить трату"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+
+<nav class="tabs">
+  <button data-act="view" data-arg="list"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Траты</button>
+  <button data-act="view" data-arg="stats"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Итоги</button>
+  <button data-act="view" data-arg="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>Ещё</button>
+</nav>
+
+<div class="sheet" id="sheet" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+const APP_VERSION = "1.0.0";
+const KEY = "traty-v1";
+const DEFAULT_CATS = [
+  ["food", "🛒", "Продукты"], ["cafe", "🍜", "Кафе"], ["transport", "🛵", "Транспорт"],
+  ["home", "🏠", "Жильё"], ["bills", "💡", "Связь и счета"], ["health", "💊", "Здоровье"],
+  ["shop", "🛍️", "Покупки"], ["fun", "🎉", "Развлечения"], ["travel", "✈️", "Поездки"],
+  ["other", "📦", "Другое"],
+];
+const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+const MONTHS_GEN = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+const MONTHS_SHORT = ["Я","Ф","М","А","М","И","И","А","С","О","Н","Д"];
+const WD = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const pad = (n) => String(n).padStart(2, "0");
+const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => isoOf(new Date());
+const r2 = (n) => Math.round(n * 100) / 100;
+
+// ---------- Storage ----------
+function freshState() {
+  return { v: 1, cats: DEFAULT_CATS.map(([id, e, n]) => ({ id, e, n })), items: [], imports: [], lastCat: "food" };
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.items) && Array.isArray(s.cats)) return normalize(s);
+  } catch (e) { /* broken storage: start fresh */ }
+  return freshState();
+}
+function normalize(s) {
+  s.imports = Array.isArray(s.imports) ? s.imports : [];
+  if (!s.cats.some((c) => c.id === "other")) s.cats.push({ id: "other", e: "📦", n: "Другое" });
+  const ids = new Set(s.cats.map((c) => c.id));
+  s.items.forEach((i) => { if (!ids.has(i.c)) i.c = "other"; });
+  return s;
+}
+let S = load();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch (e) { toast("Не удалось сохранить: память браузера заполнена"); }
+}
+const cat = (id) => S.cats.find((c) => c.id === id) || S.cats.find((c) => c.id === "other");
+
+// ---------- Formatting ----------
+function fmtNum(a) {
+  const v = r2(a);
+  return Number.isInteger(v) ? v.toLocaleString("ru-RU") : v.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+const fmt = (a) => fmtNum(a) + " ฿";
+const monthLabel = (ym) => `${MONTHS[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`;
+const dmy = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+function dayLabel(iso) {
+  const t = today();
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const d = new Date(iso + "T12:00:00");
+  const tail = `${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`;
+  if (iso === t) return `Сегодня, ${tail}`;
+  if (iso === isoOf(y)) return `Вчера, ${tail}`;
+  return `${WD[d.getDay()]}, ${tail}`;
+}
+function shiftMonth(ym, n) {
+  const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+const daysIn = (ym) => new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate();
+
+// Accepts "1 200", "1,200", "12,50", "1.234,5", "฿120", "-45" → positive-or-negative number with 2 decimals
+function parseAmount(v) {
+  if (v == null) return null;
+  let s = String(v).trim();
+  if (!s) return null;
+  s = s.replace(/[\s  ']/g, "").replace(/[^\d.,]/g, "");
+  if (!/\d/.test(s)) return null;
+  const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+  if (lc >= 0 && ld >= 0) {
+    const dec = lc > ld ? "," : ".";
+    s = s.split(dec === "," ? "." : ",").join("").replace(dec, ".");
+  } else if (lc >= 0) {
+    const p = s.split(",");
+    s = p.length > 2 || (p.length === 2 && p[1].length === 3) ? p.join("") : p.join(".");
+  } else if (ld >= 0) {
+    const p = s.split(".");
+    if (p.length > 2) s = p.join("");
+  }
+  const n = parseFloat(s);
+  return isFinite(n) ? r2(n) : null;
+}
+
+// ---------- UI state ----------
+const U = { view: "list", month: today().slice(0, 7), mode: "month", cat: null, tip: null };
+
+function render() {
+  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-current", b.dataset.arg === U.view ? "page" : "false"));
+  $("#fab").hidden = U.view === "more";
+  renderTop();
+  $("#main").innerHTML = U.view === "list" ? listHtml() : U.view === "stats" ? statsHtml() : moreHtml();
+}
+
+function periodKey() { return U.view === "stats" && U.mode === "year" ? U.month.slice(0, 4) : U.month; }
+
+function renderTop() {
+  const top = $("#top");
+  if (U.view === "more") { top.innerHTML = `<h1 class="title">Ещё</h1>`; return; }
+  const key = periodKey();
+  let items = S.items.filter((i) => i.d.startsWith(key));
+  let label = key.length === 4 ? `${key} год` : monthLabel(key);
+  if (U.view === "list" && U.cat) { items = items.filter((i) => i.c === U.cat); label = `${cat(U.cat).n} · ${label}`; }
+  const total = items.reduce((s, i) => s + i.a, 0);
+  top.innerHTML = `<button class="arrow" data-act="prev" aria-label="Предыдущий период">‹</button>
+    <div class="period"><div class="plabel">${esc(label)}</div><div class="ptotal num">${fmt(total)}</div></div>
+    <button class="arrow" data-act="next" aria-label="Следующий период">›</button>`;
+}
+
+// ---------- List ----------
+function listHtml() {
+  if (!S.items.length) {
+    return `<div class="empty"><p>Пока нет ни одной траты.<br>Нажми <b>+</b>, чтобы добавить первую,<br>или загрузи прошлые траты из таблицы.</p>
+      <button class="btn" data-act="import" style="margin:0 auto">Загрузить из таблицы</button></div>`;
+  }
+  const items = S.items.filter((i) => i.d.startsWith(U.month) && (!U.cat || i.c === U.cat))
+    .sort((a, b) => b.d.localeCompare(a.d) || (b.t || 0) - (a.t || 0));
+  let h = "";
+  if (U.cat) { const c = cat(U.cat); h += `<div class="filter"><span class="pill">${c.e} ${esc(c.n)}<button data-act="clearcat" aria-label="Сбросить фильтр">✕</button></span></div>`; }
+  if (!items.length) return h + `<div class="empty"><p>В этом месяце трат нет.</p></div>`;
+  const days = new Map();
+  items.forEach((i) => { if (!days.has(i.d)) days.set(i.d, []); days.get(i.d).push(i); });
+  for (const [d, list] of days) {
+    const sum = list.reduce((s, i) => s + i.a, 0);
+    h += `<section class="day"><div class="dayh"><span>${dayLabel(d)}</span><span class="num">${fmt(sum)}</span></div><div class="card">`;
+    for (const i of list) {
+      const c = cat(i.c);
+      h += `<button class="item" data-act="edit" data-arg="${i.id}"><span class="ie">${esc(c.e)}</span>
+        <span class="it"><span class="in">${esc(i.n || c.n)}</span>${i.n ? `<span class="inote">${esc(c.n)}</span>` : ""}</span>
+        <span class="ia num">${fmt(i.a)}</span></button>`;
+    }
+    h += `</div></section>`;
+  }
+  return h;
+}
+
+// ---------- Stats ----------
+function statsHtml() {
+  const key = periodKey(), year = key.length === 4;
+  const items = S.items.filter((i) => i.d.startsWith(key));
+  const total = items.reduce((s, i) => s + i.a, 0);
+  let h = `<div class="seg"><button data-act="mode" data-arg="month" aria-pressed="${!year}">Месяц</button><button data-act="mode" data-arg="year" aria-pressed="${year}">Год</button></div>`;
+
+  // Average: per day for a month, per month for a year; counts only the elapsed part of the current period
+  const t = today();
+  let avg = null, avgLabel;
+  if (year) {
+    const n = key < t.slice(0, 4) ? 12 : key === t.slice(0, 4) ? +t.slice(5, 7) : 0;
+    avg = n ? total / n : null; avgLabel = "в среднем за месяц";
+  } else {
+    const n = key < t.slice(0, 7) ? daysIn(key) : key === t.slice(0, 7) ? +t.slice(8, 10) : 0;
+    avg = n ? total / n : null; avgLabel = "в среднем за день";
+  }
+  h += `<div class="kpis"><div class="kpi"><b class="num">${avg == null ? "—" : fmt(avg)}</b><span>${avgLabel}</span></div>
+    <div class="kpi"><b class="num">${items.length.toLocaleString("ru-RU")}</b><span>${plural(items.length, "трата", "траты", "трат")}</span></div></div>`;
+
+  // Column chart: daily totals for a month, monthly totals for a year
+  const buckets = year ? Array.from({ length: 12 }, (_, m) => ({ k: `${key}-${pad(m + 1)}`, label: MONTHS_SHORT[m], name: `${MONTHS[m]} ${key}`, v: 0 }))
+    : Array.from({ length: daysIn(key) }, (_, d) => ({ k: `${key}-${pad(d + 1)}`, label: [1, 10, 20].includes(d + 1) || d + 1 === daysIn(key) ? String(d + 1) : "", name: `${d + 1} ${MONTHS_GEN[+key.slice(5, 7) - 1]}`, v: 0 }));
+  const idx = new Map(buckets.map((b, n) => [b.k, n]));
+  items.forEach((i) => { const n = idx.get(year ? i.d.slice(0, 7) : i.d); if (n != null) buckets[n].v += i.a; });
+  const max = Math.max(...buckets.map((b) => b.v), 0);
+  const on = buckets.find((b) => b.k === U.tip);
+  h += `<div class="chart"><div class="cap" id="cap">${on ? `<span>${esc(on.name)}</span><b class="num">${fmt(on.v)}</b>` : `<span>${year ? "По месяцам" : "По дням"}</span><span></span>`}</div>
+    <div class="cols" role="img" aria-label="${year ? "Траты по месяцам" : "Траты по дням"}">${buckets.map((b) =>
+      `<button class="${b.v ? "" : "zero"} ${b.k === U.tip ? "on" : ""}" data-act="tip" data-arg="${b.k}" aria-label="${esc(b.name)}: ${fmt(b.v)}"><i style="height:${max ? Math.max(2, (b.v / max) * 100) : 0}%"></i></button>`).join("")}</div>
+    <div class="axis">${buckets.map((b) => `<span>${b.label}</span>`).join("")}</div></div>`;
+
+  // Categories
+  const by = new Map();
+  items.forEach((i) => by.set(i.c, (by.get(i.c) || 0) + i.a));
+  const rows = [...by.entries()].sort((a, b) => b[1] - a[1]);
+  h += `<h3>По категориям</h3>`;
+  if (!rows.length) return h + `<div class="card"><div class="empty" style="padding:28px">Нет трат за этот период</div></div>`;
+  const top = rows[0][1];
+  h += `<div class="card">${rows.map(([id, v]) => {
+    const c = cat(id), pct = total ? Math.round((v / total) * 100) : 0;
+    return `<button class="crow" data-act="catfilter" data-arg="${id}"><span class="ie">${esc(c.e)}</span>
+      <span class="cname">${esc(c.n)}<small>${pct}%</small></span><span class="ia num">${fmt(v)}</span>
+      <span class="cbar"><i style="width:${(v / top) * 100}%"></i></span></button>`;
+  }).join("")}</div>`;
+  return h;
+}
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+}
+
+// ---------- More ----------
+function moreHtml() {
+  const counts = new Map();
+  S.items.forEach((i) => counts.set(i.c, (counts.get(i.c) || 0) + 1));
+  let h = `<h3>Таблицы</h3><div class="card">
+    <button class="mrow" data-act="import"><span class="ie">📥</span><span class="grow">Загрузить траты из таблицы<span class="sub">CSV, Excel (.xlsx) или вставить ячейки</span></span><span class="chev">›</span></button>
+    <button class="mrow" data-act="csvmonth"><span class="ie">📤</span><span class="grow">Выгрузить месяц в CSV<span class="sub">${monthLabel(U.month)} — открывается в Excel</span></span><span class="chev">›</span></button>
+    <button class="mrow" data-act="csvall"><span class="ie">📤</span><span class="grow">Выгрузить все траты в CSV<span class="sub">${S.items.length} ${plural(S.items.length, "трата", "траты", "трат")}</span></span><span class="chev">›</span></button>
+  </div>`;
+  if (S.imports.length) {
+    h += `<h3>Загруженные таблицы</h3><div class="card">${S.imports.slice().reverse().map((m) => {
+      const n = S.items.filter((i) => i.imp === m.id).length;
+      return `<div class="mrow"><span class="grow">${esc(m.name)}<span class="sub">${new Date(m.ts).toLocaleDateString("ru-RU")} · ${n} ${plural(n, "трата", "траты", "трат")}</span></span>
+        <button class="btn small" data-act="undoimp" data-arg="${m.id}">Отменить</button></div>`;
+    }).join("")}</div>`;
+  }
+  h += `<h3>Категории</h3><div class="card">${S.cats.map((c) =>
+    `<button class="mrow" data-act="catedit" data-arg="${c.id}"><span class="ie">${esc(c.e)}</span><span class="grow">${esc(c.n)}<span class="sub">${counts.get(c.id) || 0} ${plural(counts.get(c.id) || 0, "трата", "траты", "трат")}</span></span><span class="chev">›</span></button>`).join("")}
+    <button class="mrow" data-act="catedit" data-arg=""><span class="ie">＋</span><span class="grow">Новая категория</span></button></div>`;
+  h += `<h3>Резервная копия</h3><div class="card">
+    <button class="mrow" data-act="backup"><span class="ie">💾</span><span class="grow">Сохранить копию (JSON)<span class="sub">Все траты и категории одним файлом</span></span><span class="chev">›</span></button>
+    <button class="mrow" data-act="restore"><span class="ie">♻️</span><span class="grow">Восстановить из копии<span class="sub">Заменит текущие данные</span></span><span class="chev">›</span></button>
+  </div>
+  <p class="foot">Траты ${APP_VERSION} · данные хранятся только на этом устройстве</p>`;
+  return h;
+}
+
+// ---------- Sheet ----------
+function openSheet(html, cls = "") {
+  const s = $("#sheet");
+  s.innerHTML = `<div class="sheet-card ${cls}" role="dialog" aria-modal="true">${html}</div>`;
+  s.hidden = false;
+  document.body.classList.add("locked");
+}
+function closeSheet() {
+  const s = $("#sheet");
+  s.hidden = true; s.innerHTML = "";
+  document.body.classList.remove("locked");
+}
+const head = (title) => `<div class="shead"><h2>${esc(title)}</h2><button class="x" data-act="close" aria-label="Закрыть">✕</button></div>`;
+
+// Add / edit expense
+let F = null;
+function openForm(id) {
+  const it = id ? S.items.find((i) => i.id === id) : null;
+  const defDate = U.month === today().slice(0, 7) ? today() : `${U.month}-01`;
+  F = { id: it?.id || null, c: it?.c || (S.cats.some((c) => c.id === S.lastCat) ? S.lastCat : "other") };
+  openSheet(`${head(it ? "Трата" : "Новая трата")}
+    <div class="amt" id="amtWrap"><input id="fA" class="num" inputmode="decimal" autocomplete="off" placeholder="0" value="${it ? esc(String(it.a).replace(".", ",")) : ""}" aria-label="Сумма"><span>฿</span></div>
+    <div class="chips" id="fC">${S.cats.map((c) => `<button data-act="pick" data-arg="${c.id}" aria-pressed="${c.id === F.c}">${esc(c.e)} ${esc(c.n)}</button>`).join("")}</div>
+    <div class="row2"><input type="date" id="fD" value="${it?.d || defDate}" aria-label="Дата"><input id="fN" placeholder="Комментарий" value="${esc(it?.n || "")}" autocomplete="off" enterkeyhint="done"></div>
+    <div class="stack"><button class="btn primary block" data-act="save">Сохранить</button>
+    ${it ? `<button class="btn danger block" data-act="del">Удалить</button>` : ""}</div>`);
+  const a = $("#fA");
+  a.focus();
+  a.addEventListener("input", () => $("#amtWrap").classList.remove("bad"));
+}
+function saveForm() {
+  const a = parseAmount($("#fA").value);
+  if (!(a > 0)) { $("#amtWrap").classList.add("bad"); $("#fA").focus(); return; }
+  const d = $("#fD").value || today();
+  const n = $("#fN").value.trim();
+  if (F.id) Object.assign(S.items.find((i) => i.id === F.id), { a, d, c: F.c, n });
+  else S.items.push({ id: uid(), d, a, c: F.c, n, t: Date.now() });
+  S.lastCat = F.c;
+  save();
+  U.month = d.slice(0, 7);
+  closeSheet(); render();
+}
+function deleteItem() {
+  const k = S.items.findIndex((i) => i.id === F.id);
+  if (k < 0) return;
+  const [gone] = S.items.splice(k, 1);
+  save(); closeSheet(); render();
+  toast("Трата удалена", "Вернуть", () => { S.items.push(gone); save(); render(); });
+}
+
+// Category edit
+function openCat(id) {
+  const c = id ? S.cats.find((x) => x.id === id) : null;
+  const n = c ? S.items.filter((i) => i.c === c.id).length : 0;
+  openSheet(`${head(c ? "Категория" : "Новая категория")}
+    <div class="row2" style="grid-template-columns:80px 1fr"><input id="cE" value="${esc(c?.e || "🏷️")}" aria-label="Значок" style="text-align:center;font-size:22px"><input id="cN" value="${esc(c?.n || "")}" placeholder="Название" aria-label="Название" autocomplete="off"></div>
+    <p class="hint">Значок — любой эмодзи.</p>
+    <div class="stack"><button class="btn primary block" data-act="catsave" data-arg="${c?.id || ""}">Сохранить</button>
+    ${c && c.id !== "other" ? `<button class="btn danger block" data-act="catdel" data-arg="${c.id}">Удалить${n ? ` (${n} ${plural(n, "трата перейдёт", "траты перейдут", "трат перейдут")} в «${esc(cat("other").n)}»)` : ""}</button>` : ""}</div>`);
+  if (!c) $("#cN").focus();
+}
+function saveCat(id) {
+  const n = $("#cN").value.trim();
+  if (!n) { $("#cN").focus(); return; }
+  const e = [...$("#cE").value.trim()].slice(0, 2).join("") || "🏷️";
+  if (id) Object.assign(S.cats.find((c) => c.id === id), { n, e });
+  else S.cats.push({ id: "c" + uid(), n, e });
+  save(); closeSheet(); render();
+}
+function deleteCat(id) {
+  S.items.forEach((i) => { if (i.c === id) i.c = "other"; });
+  S.cats = S.cats.filter((c) => c.id !== id);
+  if (U.cat === id) U.cat = null;
+  save(); closeSheet(); render();
+}
+
+// ---------- Files ----------
+function pickFile(accept, cb) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = accept; inp.hidden = true;
+  inp.addEventListener("change", () => { const f = inp.files[0]; inp.remove(); if (f) cb(f); });
+  document.body.append(inp);
+  inp.click();
+}
+async function saveFile(name, text, type) {
+  const blob = new Blob([text], { type });
+  const file = new File([blob], name, { type });
+  if (matchMedia("(pointer:coarse)").matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return; }
+    catch (e) { if (e.name === "AbortError") return; }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function exportCsv(items, name) {
+  if (!items.length) { toast("Нечего выгружать — трат нет"); return; }
+  const q = (s) => /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const lines = ["Дата;Категория;Сумма;Комментарий"];
+  items.slice().sort((a, b) => a.d.localeCompare(b.d) || (a.t || 0) - (b.t || 0))
+    .forEach((i) => lines.push([dmy(i.d), q(cat(i.c).n), String(i.a).replace(".", ","), q(i.n || "")].join(";")));
+  // BOM + semicolons + decimal comma: opens correctly in Excel with Russian settings
+  saveFile(name, "﻿" + lines.join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+}
+
+// ---------- Table import ----------
+let IMP = null;
+const colLetter = (i) => { let s = ""; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = (i - m - 1) / 26; } return s; };
+const colIndex = (ref) => { let n = 0; for (const ch of ref.replace(/\d+$/, "")) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+
+function openImport() {
+  IMP = null;
+  openSheet(`${head("Загрузить из таблицы")}
+    <p class="hint">Файл CSV или Excel (.xlsx) — из Excel, Google Таблиц или Numbers (там: Экспорт → Excel или CSV). Ожидается одна трата на строку с датой и суммой; если у тебя категории разнесены по столбцам — тоже подойдёт.</p>
+    <div class="stack"><button class="btn primary block" data-act="impfile">Выбрать файл</button></div>
+    <h3>Или вставь ячейки</h3>
+    <p class="hint" style="margin:0 4px 8px">Выдели в таблице нужные строки вместе с заголовками, скопируй и вставь сюда.</p>
+    <textarea id="impPaste" placeholder="Дата	Категория	Сумма	Комментарий"></textarea>
+    <div class="stack"><button class="btn block" data-act="imppaste">Разобрать вставленное</button></div>`, "tall");
+}
+
+function decodeText(u8) {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(u8); }
+  catch (e) { return new TextDecoder("windows-1251").decode(u8); }
+}
+function parseDelimited(text) {
+  text = text.replace(/^﻿/, "");
+  const sample = text.split(/\r?\n/).slice(0, 10).join("\n");
+  const count = (ch) => sample.split(ch).length - 1;
+  const d = count("\t") ? "\t" : count(";") >= count(",") ? ";" : ",";
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"' && f === "") q = true;
+    else if (c === d) { row.push(f); f = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(f); rows.push(row); row = []; f = "";
+    } else f += c;
+  }
+  if (f !== "" || row.length) { row.push(f); rows.push(row); }
+  return cleanRows(rows);
+}
+function cleanRows(rows) {
+  const out = Array.from(rows, (r) => Array.from(r || [], (v) => String(v ?? "").trim()))
+    .filter((r) => r.some((v) => v !== ""));
+  const w = Math.max(0, ...out.map((r) => r.length));
+  out.forEach((r) => { while (r.length < w) r.push(""); });
+  return out;
+}
+
+// Minimal .xlsx reader: ZIP central directory + DecompressionStream, then the sheet XML
+async function readXlsx(buf) {
+  const dv = new DataView(buf);
+  let e = buf.byteLength - 22;
+  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error("файл повреждён");
+  const files = {};
+  let p = dv.getUint32(e + 16, true);
+  for (let i = 0, n = dv.getUint16(e + 10, true); i < n; i++) {
+    const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    const name = new TextDecoder().decode(new Uint8Array(buf, p + 46, nl));
+    files[name] = { method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), off: dv.getUint32(p + 42, true) };
+    p += 46 + nl + xl + cl;
+  }
+  const get = async (name) => {
+    const f = files[name];
+    if (!f) return null;
+    const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true);
+    const data = new Uint8Array(buf, start, f.size);
+    if (f.method === 0) return new TextDecoder().decode(data);
+    if (typeof DecompressionStream === "undefined") throw new Error("браузер слишком старый для .xlsx — сохрани таблицу как CSV");
+    return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+  };
+  const wbX = await get("xl/workbook.xml");
+  if (!wbX) throw new Error("это не файл Excel (.xlsx) — экспортируй таблицу в Excel или CSV");
+  const P = (x) => new DOMParser().parseFromString(x, "application/xml");
+  const T = (node, tag) => [...node.getElementsByTagNameNS("*", tag)];
+  const rels = {};
+  const relX = await get("xl/_rels/workbook.xml.rels");
+  if (relX) T(P(relX), "Relationship").forEach((r) => { rels[r.getAttribute("Id")] = r.getAttribute("Target"); });
+  const ssX = await get("xl/sharedStrings.xml");
+  const ss = ssX ? T(P(ssX), "si").map((si) => T(si, "t").filter((t) => t.parentNode.localName !== "rPh").map((t) => t.textContent).join("")) : [];
+  const out = [];
+  for (const sh of T(P(wbX), "sheet")) {
+    const rid = sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id") || sh.getAttribute("r:id");
+    let tgt = rels[rid];
+    if (!tgt) continue;
+    tgt = tgt.startsWith("/") ? tgt.slice(1) : "xl/" + tgt.replace(/^\.\//, "");
+    const x = await get(tgt);
+    if (!x) continue;
+    const rows = [];
+    for (const row of T(P(x), "row")) {
+      const ri = (+row.getAttribute("r") || rows.length + 1) - 1;
+      const arr = [];
+      let ci = 0;
+      for (const c of row.children) {
+        if (c.localName !== "c") continue;
+        const ref = c.getAttribute("r");
+        if (ref) ci = colIndex(ref);
+        const t = c.getAttribute("t");
+        const v = T(c, "v")[0]?.textContent ?? "";
+        arr[ci] = t === "s" ? ss[+v] ?? "" : t === "inlineStr" ? T(c, "t").map((n) => n.textContent).join("") : t === "b" ? (v === "1" ? "ИСТИНА" : "ЛОЖЬ") : v;
+        ci++;
+      }
+      rows[ri] = arr;
+    }
+    out.push({ name: sh.getAttribute("name") || `Лист ${out.length + 1}`, rows: cleanRows(rows) });
+  }
+  if (!out.length) throw new Error("в файле не нашлось листов");
+  return out;
+}
+
+const RU_MON = [/^янв/, /^фев/, /^мар/, /^апр/, /^ма[йя]/, /^июн/, /^июл/, /^авг/, /^сен/, /^окт/, /^ноя/, /^дек/];
+const EN_MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const DATE_RX = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})(?!\d)/;
+// Returns "YYYY-MM-DD" or null. df: "dmy" | "mdy"
+function parseDate(v, df = "dmy") {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
+  let y, m, d, mm;
+  if (/^\d{5}(\.\d+)?$/.test(s)) { // Excel serial date
+    const n = Math.floor(+s);
+    if (n < 25000 || n > 80000) return null;
+    const dt = new Date(Date.UTC(1899, 11, 30) + n * 864e5);
+    y = dt.getUTCFullYear(); m = dt.getUTCMonth() + 1; d = dt.getUTCDate();
+  } else if ((mm = s.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/))) { y = +mm[1]; m = +mm[2]; d = +mm[3]; }
+  else if ((mm = s.match(DATE_RX))) {
+    y = +mm[3]; if (y < 100) y += 2000;
+    [d, m] = df === "mdy" ? [+mm[2], +mm[1]] : [+mm[1], +mm[2]];
+  } else if ((mm = s.match(/^(\d{1,2})\s+([a-zа-яё]+)\.?,?\s*(\d{4})?/))) {
+    d = +mm[1]; m = RU_MON.findIndex((r) => r.test(mm[2])) + 1 || EN_MON.indexOf(mm[2].slice(0, 3)) + 1;
+    y = mm[3] ? +mm[3] : new Date().getFullYear();
+  } else if ((mm = s.match(/^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/))) {
+    m = EN_MON.indexOf(mm[1]) + 1; d = +mm[2]; y = +mm[3];
+  } else return null;
+  if (!m || m > 12 || !d || d > 31 || y < 2000 || y > 2100) return null;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getMonth() !== m - 1) return null;
+  return `${y}-${pad(m)}-${pad(d)}`;
+}
+const looksNumber = (v) => /^[-−(]?\s*[฿$€₽]?\s*[\d\s  .,']+\s*(฿|бат|baht|thb|\$|€|₽|руб\.?)?\)?$/i.test(String(v).trim()) && /\d/.test(v);
+const looksTextDate = (v) => { const s = String(v).trim(); return !/^\d{5}(\.\d+)?$/.test(s) && !!parseDate(s); };
+const TOTAL_RX = /^(итого|всего|total|сумма за|итог)/i;
+
+const HDR = {
+  d: /дат|date|день|day|когда|число/i,
+  a: /сумм|amount|цен|стоим|price|^sum|бат|baht|฿|thb|потрач|расход|spent|cost|руб/i,
+  c: /катег|category|тип|type|статья|групп|group|раздел/i,
+  n: /коммент|опис|note|comment|descr|что|назв|name|товар|item|детал|memo|примеч|где|магаз|shop/i,
+};
+
+function colStats(rows, start) {
+  const data = rows.slice(start, start + 80);
+  const w = rows[0]?.length || 0;
+  return Array.from({ length: w }, (_, i) => {
+    const vals = data.map((r) => r[i]).filter((v) => v !== "");
+    const k = vals.length || 1;
+    const serial = vals.filter((v) => /^\d{5}(\.\d+)?$/.test(v) && parseDate(v)).length / k;
+    return {
+      filled: vals.length,
+      textDate: vals.filter(looksTextDate).length / k,
+      serial,
+      num: vals.filter(looksNumber).length / k,
+      distinct: new Set(vals.map((v) => v.toLowerCase())).size / k,
+    };
+  });
+}
+function autoConfig(rows) {
+  const r0 = rows[0] || [], r1 = rows[1] || [];
+  const header = r0.some((v) => v) && !r0.some((v) => v && (looksNumber(v) || looksTextDate(v))) && (rows.length < 2 || r1.some((v) => looksNumber(v) || looksTextDate(v)));
+  const st = colStats(rows, header ? 1 : 0);
+  const H = header ? r0 : r0.map(() => "");
+  const used = new Set();
+  const byHdr = (k, ok = () => true) => { const i = H.findIndex((h, n) => h && !used.has(n) && HDR[k].test(h) && ok(n)); if (i >= 0) used.add(i); return i; };
+  const best = (score) => { let bi = -1, bs = 0; st.forEach((s, i) => { if (used.has(i) || !s.filled) return; const v = score(s); if (v > bs) { bs = v; bi = i; } }); if (bi >= 0) used.add(bi); return bi; };
+  let d = byHdr("d");
+  if (d < 0) d = best((s) => (s.textDate > 0.6 ? 2 + s.textDate : s.serial > 0.8 ? 1 + s.serial : 0));
+  let a = byHdr("a", (n) => st[n].num > 0.5);
+  let c = byHdr("c");
+  let n = byHdr("n");
+  const numericCols = st.map((s, i) => i).filter((i) => i !== d && i !== n && i !== c && st[i].filled && st[i].num > 0.8 && !(header && /итог|total|всего/i.test(H[i])));
+  const mode = a < 0 && header && numericCols.length >= 2 ? "wide" : "rows";
+  if (mode === "rows") {
+    if (a < 0) a = best((s) => (s.num > 0.6 ? s.num : 0));
+    if (c < 0) c = best((s) => (s.num < 0.3 && s.distinct < 0.6 ? 1 - s.distinct : 0));
+    if (n < 0) n = best((s) => (s.num < 0.5 ? 0.1 + s.distinct : 0));
+  }
+  // Day.month vs month/day: a first part above 12 settles it; otherwise day first
+  const parts = rows.slice(header ? 1 : 0).map((r) => String(r[d] ?? "").match(DATE_RX)).filter(Boolean);
+  const df = parts.some((m) => +m[2] > 12 && +m[1] <= 12) && !parts.some((m) => +m[1] > 12) ? "mdy" : "dmy";
+  return { header, mode, map: { d, a, c, n }, wide: numericCols, df, dfAuto: df, skipDup: true };
+}
+
+async function handleFile(f) {
+  try {
+    const buf = await f.arrayBuffer();
+    const u8 = new Uint8Array(buf);
+    let sheets;
+    if (u8[0] === 0x50 && u8[1] === 0x4b) sheets = await readXlsx(buf);
+    else if (u8[0] === 0xd0 && u8[1] === 0xcf) throw new Error("старый формат .xls не поддерживается — пересохрани таблицу как .xlsx или CSV");
+    else sheets = [{ name: f.name, rows: parseDelimited(decodeText(u8)) }];
+    startMapping(f.name, sheets);
+  } catch (e) { toast("Не получилось прочитать файл: " + e.message); }
+}
+function startMapping(name, sheets) {
+  sheets = sheets.filter((s) => s.rows.length);
+  if (!sheets.length) { toast("В таблице нет данных"); return; }
+  const si = sheets.reduce((b, s, i) => (s.rows.length > sheets[b].rows.length ? i : b), 0);
+  IMP = { name, sheets, si, ...autoConfig(sheets[si].rows) };
+  renderImport();
+}
+
+function computeImport() {
+  const rows = IMP.sheets[IMP.si].rows;
+  const { map, header, mode, df } = IMP;
+  const H = rows[0] || [];
+  const ok = [], bad = [];
+  let skipped = 0, last = null;
+  if (map.d < 0) return { ok, bad, skipped, error: "Выбери столбец с датой" };
+  if (mode === "rows" && map.a < 0) return { ok, bad, skipped, error: "Выбери столбец с суммой" };
+  if (mode === "wide" && !IMP.wide.length) return { ok, bad, skipped, error: "Отметь столбцы-категории" };
+  for (let r = header ? 1 : 0; r < rows.length; r++) {
+    const row = rows[r], line = r + 1;
+    if (row.some((v) => TOTAL_RX.test(v))) { skipped++; continue; }
+    const dRaw = row[map.d];
+    let d = dRaw ? parseDate(dRaw, df) : null;
+    const amounts = mode === "rows" ? [[row[map.a], map.c >= 0 ? row[map.c] : ""]] : IMP.wide.map((i) => [row[i], header ? H[i] : `Столбец ${colLetter(i)}`]);
+    const has = amounts.some(([v]) => v);
+    if (dRaw && !d) { if (has) bad.push(`Строка ${line}: не понял дату «${dRaw}»`); else skipped++; continue; }
+    if (d) last = d; else d = last; // empty date cell = same day as the row above
+    if (!has) { skipped++; continue; }
+    if (!d) { bad.push(`Строка ${line}: нет даты`); continue; }
+    for (const [v, c] of amounts) {
+      if (!v) continue;
+      const a = parseAmount(v);
+      if (a == null || !looksNumber(v)) { bad.push(`Строка ${line}: не понял сумму «${v}»`); continue; }
+      if (a === 0) continue;
+      ok.push({ d, a: Math.abs(a), cat: c, n: map.n >= 0 ? row[map.n] : "" });
+    }
+  }
+  const have = new Set(S.items.map((i) => `${i.d}|${i.a}|${(i.n || "").toLowerCase()}`));
+  ok.forEach((o) => { o.dup = have.has(`${o.d}|${o.a}|${o.n.toLowerCase()}`); });
+  const known = new Set(S.cats.map((c) => c.n.toLowerCase()));
+  const newCats = [...new Set(ok.map((o) => o.cat.trim()).filter((c) => c && !known.has(c.toLowerCase())))];
+  return { ok, bad, skipped, newCats };
+}
+
+function renderImport() {
+  const card = $("#sheet .sheet-card");
+  const scroll = card ? card.scrollTop : 0;
+  const rows = IMP.sheets[IMP.si].rows;
+  const R = computeImport();
+  const H = rows[0] || [];
+  const sample = rows[IMP.header ? 1 : 0] || [];
+  const colName = (i) => `${colLetter(i)} · ${(IMP.header ? H[i] : sample[i]) || "пусто"}`.slice(0, 40);
+  const sel = (k, optional) => `<select data-imp="map" data-key="${k}">${optional ? `<option value="-1">— нет —</option>` : `<option value="-1">— выбери —</option>`}${H.map((_, i) => `<option value="${i}" ${IMP.map[k] === i ? "selected" : ""}>${esc(colName(i))}</option>`).join("")}</select>`;
+  const take = R.ok.filter((o) => !(IMP.skipDup && o.dup));
+  const dups = R.ok.filter((o) => o.dup).length;
+  const sum = take.reduce((s, o) => s + o.a, 0);
+  const dates = take.map((o) => o.d).sort();
+
+  let h = head("Загрузить из таблицы") + `<p class="hint">${esc(IMP.name)} · ${rows.length} ${plural(rows.length, "строка", "строки", "строк")}</p>`;
+  if (IMP.sheets.length > 1) h += `<label class="field" style="margin-top:14px"><span>Лист</span><select data-imp="sheet">${IMP.sheets.map((s, i) => `<option value="${i}" ${i === IMP.si ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select></label>`;
+  h += `<div class="seg" style="margin-top:14px;background:var(--sunk)"><button data-act="impmode" data-arg="rows" aria-pressed="${IMP.mode === "rows"}">Трата в строке</button><button data-act="impmode" data-arg="wide" aria-pressed="${IMP.mode === "wide"}">Категории в столбцах</button></div>
+    <label class="check" style="margin-top:8px"><input type="checkbox" data-imp="header" ${IMP.header ? "checked" : ""}> Первая строка — заголовки</label>
+    <div class="grid2"><label class="field"><span>Дата</span>${sel("d")}</label>`;
+  if (IMP.mode === "rows") h += `<label class="field"><span>Сумма</span>${sel("a")}</label><label class="field"><span>Категория</span>${sel("c", true)}</label>`;
+  h += `<label class="field"><span>Комментарий</span>${sel("n", true)}</label>
+    <label class="field"><span>Формат даты</span><select data-imp="df"><option value="dmy" ${IMP.df === "dmy" ? "selected" : ""}>день.месяц${IMP.dfAuto === "dmy" ? " (авто)" : ""}</option><option value="mdy" ${IMP.df === "mdy" ? "selected" : ""}>месяц/день${IMP.dfAuto === "mdy" ? " (авто)" : ""}</option></select></label></div>`;
+  if (IMP.mode === "wide") {
+    h += `<div class="field" style="margin-top:12px"><span>Столбцы-категории</span><div class="colsel">${H.map((_, i) => i === IMP.map.d || i === IMP.map.n ? "" :
+      `<label class="check" style="background:var(--sunk);border-radius:9px;padding:6px 10px;font-size:14px"><input type="checkbox" data-imp="wide" value="${i}" ${IMP.wide.includes(i) ? "checked" : ""}>${esc(IMP.header ? H[i] || colLetter(i) : colLetter(i))}</label>`).join("")}</div></div>`;
+  }
+  if (R.error) h += `<div class="box"><p>${esc(R.error)}</p></div>`;
+  else {
+    h += `<div class="box"><p class="sum">${take.length} ${plural(take.length, "трата", "траты", "трат")} · <span class="num">${fmt(sum)}</span></p>
+      ${dates.length ? `<p class="hint">${dmy(dates[0])} — ${dmy(dates[dates.length - 1])}</p>` : ""}
+      ${R.newCats.length ? `<p class="hint">Новые категории: ${esc(R.newCats.slice(0, 12).join(", "))}${R.newCats.length > 12 ? "…" : ""}</p>` : ""}
+      ${R.skipped ? `<p class="hint">Пропущено пустых и итоговых строк: ${R.skipped}</p>` : ""}
+      ${dups ? `<label class="check"><input type="checkbox" data-imp="dup" ${IMP.skipDup ? "checked" : ""}> Пропустить ${dups} ${plural(dups, "трату", "траты", "трат")}, которые уже есть в приложении</label>` : ""}</div>`;
+    if (R.bad.length) h += `<details class="box warnbox"><summary>Не понял ${R.bad.length} ${plural(R.bad.length, "значение", "значения", "значений")} — они не загрузятся</summary><ul>${R.bad.slice(0, 30).map((b) => `<li>${esc(b)}</li>`).join("")}${R.bad.length > 30 ? "<li>…</li>" : ""}</ul></details>`;
+    if (take.length) {
+      h += `<table><thead><tr><th>Дата</th><th>Категория</th><th>Комментарий</th><th class="r">Сумма</th></tr></thead><tbody>${take.slice(0, 8).map((o) =>
+        `<tr><td class="num">${dmy(o.d)}</td><td>${esc(o.cat || cat("other").n)}</td><td>${esc(o.n)}</td><td class="r num">${fmt(o.a)}</td></tr>`).join("")}</tbody></table>
+        ${take.length > 8 ? `<p class="hint">…и ещё ${take.length - 8}</p>` : ""}`;
+    }
+  }
+  h += `<div class="stack"><button class="btn primary block" data-act="impdo" ${take.length ? "" : "disabled"}>Загрузить ${take.length} ${plural(take.length, "трату", "траты", "трат")}</button>
+    <button class="btn block" data-act="import">Выбрать другую таблицу</button></div>`;
+  if (card) { card.innerHTML = h; card.scrollTop = scroll; } else openSheet(h, "tall");
+}
+
+function onImportChange(el) {
+  const k = el.dataset.imp;
+  if (k === "sheet") { const si = +el.value; IMP = { ...IMP, si, ...autoConfig(IMP.sheets[si].rows) }; }
+  else if (k === "map") IMP.map[el.dataset.key] = +el.value;
+  else if (k === "header") IMP.header = el.checked;
+  else if (k === "df") IMP.df = el.value;
+  else if (k === "dup") IMP.skipDup = el.checked;
+  else if (k === "wide") { const i = +el.value; IMP.wide = el.checked ? [...IMP.wide, i].sort((a, b) => a - b) : IMP.wide.filter((x) => x !== i); }
+  renderImport();
+}
+function doImport() {
+  const R = computeImport();
+  const take = R.ok.filter((o) => !(IMP.skipDup && o.dup));
+  if (!take.length) return;
+  const byName = new Map(S.cats.map((c) => [c.n.toLowerCase(), c.id]));
+  const catId = (name) => {
+    const n = name.trim();
+    if (!n) return "other";
+    const k = n.toLowerCase();
+    if (!byName.has(k)) { const id = "c" + uid(); S.cats.push({ id, e: "🏷️", n }); byName.set(k, id); }
+    return byName.get(k);
+  };
+  const id = uid(), now = Date.now();
+  take.forEach((o, n) => S.items.push({ id: uid() + n, d: o.d, a: o.a, c: catId(o.cat), n: o.n, t: now + n, imp: id }));
+  S.imports.push({ id, ts: now, name: IMP.name, count: take.length });
+  save();
+  U.month = take.map((o) => o.d).sort().pop().slice(0, 7);
+  U.view = "list"; U.cat = null;
+  closeSheet(); render();
+  toast(`Загружено: ${take.length} ${plural(take.length, "трата", "траты", "трат")}`);
+}
+
+// ---------- Toast ----------
+let toastTimer;
+function toast(msg, action, fn) {
+  const t = $("#toast");
+  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button>${esc(action)}</button>` : ""}`;
+  t.hidden = false;
+  if (action) t.querySelector("button").onclick = () => { t.hidden = true; fn(); };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, action ? 5000 : 3000);
+}
+
+// ---------- Events ----------
+const ACT = {
+  view: (v) => { U.view = v; U.tip = null; if (v !== "list") U.cat = null; render(); scrollTo(0, 0); },
+  prev: () => { U.month = shiftMonth(U.month, periodKey().length === 4 ? -12 : -1); U.tip = null; render(); },
+  next: () => { U.month = shiftMonth(U.month, periodKey().length === 4 ? 12 : 1); U.tip = null; render(); },
+  mode: (m) => { U.mode = m; U.tip = null; render(); },
+  tip: (k) => { U.tip = U.tip === k ? null : k; render(); },
+  catfilter: (id) => { U.cat = id; U.view = "list"; if (U.mode === "year") U.mode = "month"; render(); scrollTo(0, 0); },
+  clearcat: () => { U.cat = null; render(); },
+  add: () => openForm(null),
+  edit: (id) => openForm(id),
+  pick: (id) => { F.c = id; document.querySelectorAll("#fC button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.arg === id)); },
+  save: saveForm,
+  del: deleteItem,
+  close: closeSheet,
+  catedit: (id) => openCat(id),
+  catsave: (id) => saveCat(id),
+  catdel: (id) => deleteCat(id),
+  import: openImport,
+  impfile: () => pickFile(".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", handleFile),
+  imppaste: () => { const t = $("#impPaste").value; if (!t.trim()) { $("#impPaste").focus(); return; } startMapping("Вставленные ячейки", [{ name: "Вставка", rows: parseDelimited(t) }]); },
+  impmode: (m) => { IMP.mode = m; renderImport(); },
+  impdo: doImport,
+  undoimp: (id) => {
+    const m = S.imports.find((x) => x.id === id);
+    const n = S.items.filter((i) => i.imp === id).length;
+    if (!confirm(`Удалить ${n} ${plural(n, "трату", "траты", "трат")}, загруженные из «${m.name}»?`)) return;
+    S.items = S.items.filter((i) => i.imp !== id);
+    S.imports = S.imports.filter((x) => x.id !== id);
+    save(); render(); toast("Загрузка отменена");
+  },
+  csvmonth: () => exportCsv(S.items.filter((i) => i.d.startsWith(U.month)), `траты-${U.month}.csv`),
+  csvall: () => exportCsv(S.items, `траты-все-${today()}.csv`),
+  backup: () => saveFile(`траты-копия-${today()}.json`, JSON.stringify(S), "application/json"),
+  restore: () => pickFile(".json,application/json", async (f) => {
+    try {
+      const s = JSON.parse(await f.text());
+      if (!s || !Array.isArray(s.items) || !Array.isArray(s.cats)) throw new Error();
+      if (!confirm(`Заменить текущие данные копией (${s.items.length} ${plural(s.items.length, "трата", "траты", "трат")})?`)) return;
+      S = normalize(s); save(); render(); toast("Данные восстановлены");
+    } catch (e) { toast("Это не файл копии «Траты»"); }
+  }),
+};
+
+document.addEventListener("click", (e) => {
+  if (e.target.id === "sheet") { closeSheet(); return; }
+  const el = e.target.closest("[data-act]");
+  if (!el || el.disabled) return;
+  const fn = ACT[el.dataset.act];
+  if (fn) fn(el.dataset.arg);
+});
+document.addEventListener("change", (e) => { if (e.target.dataset.imp) onImportChange(e.target); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#sheet").hidden) closeSheet();
+  if (e.key === "Enter" && F && (e.target.id === "fA" || e.target.id === "fN")) { e.preventDefault(); saveForm(); }
+});
+// Desktop: hovering a chart column shows its value
+document.addEventListener("pointerover", (e) => {
+  if (e.pointerType !== "mouse") return;
+  const b = e.target.closest(".cols button");
+  if (!b || U.tip === b.dataset.arg) return;
+  U.tip = b.dataset.arg; render();
+});
+
+render();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
