@@ -93,8 +93,11 @@ h3{font-size:13px;font-weight:650;color:var(--muted);text-transform:uppercase;le
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
 .shead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
 .x{width:34px;height:34px;border-radius:50%;background:var(--sunk);color:var(--muted);display:grid;place-items:center;font-size:14px;flex:none}
-.entry{display:grid;grid-template-columns:minmax(0,1fr) 34%;gap:10px;margin-top:6px}
-.entry input{font-size:20px;font-weight:600;padding:13px 14px}
+.entry{display:grid;grid-template-columns:minmax(0,1.3fr) auto minmax(0,1fr);gap:8px;align-items:end;margin-top:12px}
+.times{color:var(--muted);font-size:22px;padding-bottom:12px}
+input.big{font-size:20px;font-weight:600;padding:13px 14px}
+.total{display:flex;justify-content:space-between;align-items:baseline;background:var(--sunk);border-radius:12px;padding:12px 14px;margin-top:12px;color:var(--muted);font-weight:600}
+.total b{color:var(--ink);font-size:24px;font-weight:750}
 input.bad{outline:2px solid var(--warn);outline-offset:-1px}
 .sug{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .sug:empty{display:none}
@@ -137,6 +140,8 @@ input.bad{outline:2px solid var(--warn);outline-offset:-1px}
 .crow{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:11px 14px;border-top:1px solid var(--line);width:100%;text-align:left}
 .crow:first-child{border-top:0}
 .crow .ie{grid-row:1/3}
+.crow.noicon{grid-template-columns:minmax(0,1fr) auto}
+.crow.noicon .cbar{grid-column:1/3}
 .cname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cname small{color:var(--muted);font-weight:500;margin-left:6px;font-size:13px}
 .cbar{grid-column:2/4;height:6px;background:var(--sunk);border-radius:3px;overflow:hidden}
@@ -190,7 +195,7 @@ td.r,th.r{text-align:right;padding-right:0;white-space:nowrap}
 
 <script>
 "use strict";
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const KEY = "traty-v1";
 const DEFAULT_CATS = [
   ["food", "🛒", "Продукты"], ["cafe", "🍜", "Кафе"], ["transport", "🛵", "Транспорт"],
@@ -282,7 +287,7 @@ function parseAmount(v) {
 }
 
 // ---------- UI state ----------
-const U = { view: "list", month: today().slice(0, 7), mode: "month", cat: null, tip: null };
+const U = { view: "list", month: today().slice(0, 7), mode: "month", cat: null, name: null, group: "cat", tip: null };
 
 function render() {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-current", b.dataset.arg === U.view ? "page" : "false"));
@@ -300,6 +305,7 @@ function renderTop() {
   let items = S.items.filter((i) => i.d.startsWith(key));
   let label = key.length === 4 ? `${key} год` : monthLabel(key);
   if (U.view === "list" && U.cat) { items = items.filter((i) => i.c === U.cat); label = `${cat(U.cat).n} · ${label}`; }
+  if (U.view === "list" && U.name) { items = items.filter(nameIs); label = `${items[0]?.n || U.name} · ${label}`; }
   const total = items.reduce((s, i) => s + i.a, 0);
   top.innerHTML = `<button class="arrow" data-act="prev" aria-label="Предыдущий период">‹</button>
     <div class="period"><div class="plabel">${esc(label)}</div><div class="ptotal num">${fmt(total)}</div></div>
@@ -307,14 +313,16 @@ function renderTop() {
 }
 
 // ---------- List ----------
+const nameIs = (i) => (i.n || "").trim().toLowerCase() === U.name;
 function listHtml() {
   if (!S.items.length) {
     return `<div class="empty"><p>Пока нет ни одной траты.<br>Нажми <b>+</b>, чтобы добавить первую,<br>или загрузи прошлые траты из таблицы.</p>
       <button class="btn" data-act="import" style="margin:0 auto">Загрузить из таблицы</button></div>`;
   }
-  const items = S.items.filter((i) => i.d.startsWith(U.month) && (!U.cat || i.c === U.cat))
+  const items = S.items.filter((i) => i.d.startsWith(U.month) && (!U.cat || i.c === U.cat) && (!U.name || nameIs(i)))
     .sort((a, b) => b.d.localeCompare(a.d) || (b.t || 0) - (a.t || 0));
   let h = "";
+  if (U.name) h += `<div class="filter"><span class="pill">${esc(items[0]?.n || U.name)}<button data-act="clearcat" aria-label="Сбросить фильтр">✕</button></span></div>`;
   if (U.cat) { const c = cat(U.cat); h += `<div class="filter"><span class="pill">${c.e} ${esc(c.n)}<button data-act="clearcat" aria-label="Сбросить фильтр">✕</button></span></div>`; }
   if (!items.length) return h + `<div class="empty"><p>В этом месяце трат нет.</p></div>`;
   const days = new Map();
@@ -325,7 +333,7 @@ function listHtml() {
     for (const i of list) {
       const c = cat(i.c);
       h += `<button class="item" data-act="edit" data-arg="${i.id}"><span class="ie">${esc(c.e)}</span>
-        <span class="it"><span class="in">${esc(i.n || c.n)}</span>${i.n ? `<span class="inote">${esc(c.n)}</span>` : ""}</span>
+        <span class="it"><span class="in">${esc(i.n || c.n)}</span><span class="inote">${[i.q && i.q !== 1 ? `${fmtNum(i.p)} ฿ × ${fmtNum(i.q)}` : "", i.n ? c.n : ""].filter(Boolean).map(esc).join(" · ")}</span></span>
         <span class="ia num">${fmt(i.a)}</span></button>`;
     }
     h += `</div></section>`;
@@ -365,18 +373,28 @@ function statsHtml() {
       `<button class="${b.v ? "" : "zero"} ${b.k === U.tip ? "on" : ""}" data-act="tip" data-arg="${b.k}" aria-label="${esc(b.name)}: ${fmt(b.v)}"><i style="height:${max ? Math.max(2, (b.v / max) * 100) : 0}%"></i></button>`).join("")}</div>
     <div class="axis">${buckets.map((b) => `<span>${b.label}</span>`).join("")}</div></div>`;
 
-  // Categories
+  // Breakdown: by category or by item name (like a SUMIF over the "Название" column)
+  const byName = U.group === "name";
   const by = new Map();
-  items.forEach((i) => by.set(i.c, (by.get(i.c) || 0) + i.a));
-  const rows = [...by.entries()].sort((a, b) => b[1] - a[1]);
-  h += `<h3>По категориям</h3>`;
+  items.forEach((i) => {
+    const k = byName ? (i.n || "").trim().toLowerCase() || "—" : i.c;
+    const e = by.get(k) || { v: 0, n: 0, label: (i.n || "").trim() || "Без названия" };
+    e.v += i.a; e.n++;
+    by.set(k, e);
+  });
+  const rows = [...by.entries()].sort((a, b) => b[1].v - a[1].v);
+  h += `<div class="seg" style="margin:22px 0 10px"><button data-act="group" data-arg="cat" aria-pressed="${!byName}">По категориям</button><button data-act="group" data-arg="name" aria-pressed="${byName}">По названиям</button></div>`;
   if (!rows.length) return h + `<div class="card"><div class="empty" style="padding:28px">Нет трат за этот период</div></div>`;
-  const top = rows[0][1];
-  h += `<div class="card">${rows.map(([id, v]) => {
-    const c = cat(id), pct = total ? Math.round((v / total) * 100) : 0;
-    return `<button class="crow" data-act="catfilter" data-arg="${id}"><span class="ie">${esc(c.e)}</span>
-      <span class="cname">${esc(c.n)}<small>${pct}%</small></span><span class="ia num">${fmt(v)}</span>
-      <span class="cbar"><i style="width:${(v / top) * 100}%"></i></span></button>`;
+  const top = rows[0][1].v;
+  h += `<div class="card">${rows.map(([k, e]) => {
+    const pct = total ? Math.round((e.v / total) * 100) : 0;
+    const bar = `<span class="cbar"><i style="width:${(e.v / top) * 100}%"></i></span>`;
+    if (byName) {
+      return `<button class="crow noicon" data-act="namefilter" data-arg="${esc(k)}"><span class="cname">${esc(e.label)}<small>${pct}% · ${e.n} ${plural(e.n, "покупка", "покупки", "покупок")}</small></span><span class="ia num">${fmt(e.v)}</span>${bar}</button>`;
+    }
+    const c = cat(k);
+    return `<button class="crow" data-act="catfilter" data-arg="${k}"><span class="ie">${esc(c.e)}</span>
+      <span class="cname">${esc(c.n)}<small>${pct}%</small></span><span class="ia num">${fmt(e.v)}</span>${bar}</button>`;
   }).join("")}</div>`;
   return h;
 }
@@ -436,7 +454,7 @@ function knownNames() {
     if (!n) return;
     const k = n.toLowerCase();
     const e = m.get(k) || { n, count: 0 };
-    e.count++; e.c = i.c; e.a = i.a; e.n = n;
+    e.count++; e.c = i.c; e.a = i.p ?? i.a; e.n = n;
     m.set(k, e);
   });
   return [...m.values()].sort((a, b) => b.count - a.count);
@@ -446,11 +464,14 @@ function openForm(id, keep) {
   const defDate = keep?.d || (U.month === today().slice(0, 7) ? today() : `${U.month}-01`);
   F = { id: it?.id || null, c: it?.c || keep?.c || (S.cats.some((c) => c.id === S.lastCat) ? S.lastCat : "other"), names: knownNames(), catTouched: !!it };
   openSheet(`${head(it ? "Трата" : "Новая трата")}
-    <div class="entry">
-      <label class="field"><span>Название</span><input id="fN" placeholder="Например, брокколи" value="${esc(it?.n || "")}" autocomplete="off" autocapitalize="sentences" enterkeyhint="next"></label>
-      <label class="field"><span>Цена, ฿</span><input id="fA" class="num" inputmode="decimal" autocomplete="off" placeholder="0" value="${it ? esc(String(it.a).replace(".", ",")) : ""}" enterkeyhint="done"></label>
-    </div>
+    <label class="field"><span>Название</span><input id="fN" class="big" placeholder="Например, брокколи" value="${esc(it?.n || "")}" autocomplete="off" autocapitalize="sentences" enterkeyhint="next"></label>
     <div class="sug" id="fS"></div>
+    <div class="entry">
+      <label class="field"><span>Цена, ฿</span><input id="fA" class="num big" inputmode="decimal" autocomplete="off" placeholder="0" value="${it ? esc(numIn(it.p ?? it.a)) : ""}" enterkeyhint="next"></label>
+      <span class="times">×</span>
+      <label class="field"><span>Кол-во</span><input id="fQ" class="num big" inputmode="decimal" autocomplete="off" value="${esc(numIn(it?.q ?? 1))}" enterkeyhint="done"></label>
+    </div>
+    <div class="total"><span>Сумма</span><b class="num" id="fT">0&nbsp;฿</b></div>
     <div class="field" style="margin-top:14px"><span>Категория</span></div>
     <div class="chips" id="fC" style="margin-top:6px">${S.cats.map((c) => `<button data-act="pick" data-arg="${c.id}" aria-pressed="${c.id === F.c}">${esc(c.e)} ${esc(c.n)}</button>`).join("")}</div>
     <label class="field" style="margin-top:14px"><span>Дата</span><input type="date" id="fD" value="${it?.d || defDate}"></label>
@@ -461,8 +482,16 @@ function openForm(id, keep) {
   const n = $("#fN");
   n.focus();
   n.addEventListener("input", () => { n.classList.remove("bad"); showSug(); });
-  $("#fA").addEventListener("input", () => $("#fA").classList.remove("bad"));
+  ["#fA", "#fQ"].forEach((k) => $(k).addEventListener("input", () => { $(k).classList.remove("bad"); updTotal(); }));
+  $("#fQ").addEventListener("focus", (e) => e.target.select());
+  updTotal();
 }
+const numIn = (v) => String(v).replace(".", ",");
+function formSum() {
+  const p = parseAmount($("#fA").value), q = parseAmount($("#fQ").value);
+  return { p, q, a: p != null && q != null ? r2(p * q) : null };
+}
+function updTotal() { const { a } = formSum(); $("#fT").textContent = fmt(a || 0); }
 function showSug() {
   const q = $("#fN").value.trim().toLowerCase();
   const box = $("#fS");
@@ -487,12 +516,13 @@ function pickSug(name) {
 }
 function saveForm(more) {
   const n = $("#fN").value.trim();
-  const a = parseAmount($("#fA").value);
+  const { p, q, a } = formSum();
   if (!n && !F.id) { $("#fN").classList.add("bad"); $("#fN").focus(); return; }
-  if (!(a > 0)) { $("#fA").classList.add("bad"); $("#fA").focus(); return; }
+  if (!(p > 0)) { $("#fA").classList.add("bad"); $("#fA").focus(); return; }
+  if (!(q > 0)) { $("#fQ").classList.add("bad"); $("#fQ").focus(); return; }
   const d = $("#fD").value || today();
-  if (F.id) Object.assign(S.items.find((i) => i.id === F.id), { a, d, c: F.c, n });
-  else S.items.push({ id: uid(), d, a, c: F.c, n, t: Date.now() });
+  if (F.id) Object.assign(S.items.find((i) => i.id === F.id), { p, q, a, d, c: F.c, n });
+  else S.items.push({ id: uid(), d, p, q, a, c: F.c, n, t: Date.now() });
   S.lastCat = F.c;
   save();
   U.month = d.slice(0, 7);
@@ -557,9 +587,9 @@ async function saveFile(name, text, type) {
 function exportCsv(items, name) {
   if (!items.length) { toast("Нечего выгружать — трат нет"); return; }
   const q = (s) => /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  const lines = ["Дата;Название;Категория;Сумма"];
+  const lines = ["Дата;Название;Цена;Количество;Сумма;Категория"];
   items.slice().sort((a, b) => a.d.localeCompare(b.d) || (a.t || 0) - (b.t || 0))
-    .forEach((i) => lines.push([dmy(i.d), q(i.n || ""), q(cat(i.c).n), String(i.a).replace(".", ",")].join(";")));
+    .forEach((i) => lines.push([dmy(i.d), q(i.n || ""), numIn(i.p ?? i.a), numIn(i.q ?? 1), numIn(i.a), q(cat(i.c).n)].join(";")));
   // BOM + semicolons + decimal comma: opens correctly in Excel with Russian settings
   saveFile(name, "﻿" + lines.join("\r\n") + "\r\n", "text/csv;charset=utf-8");
 }
@@ -709,51 +739,89 @@ const TOTAL_RX = /^(итого|всего|total|сумма за|итог)/i;
 
 const HDR = {
   d: /дат|date|день|day|когда|число/i,
-  a: /сумм|amount|цен|стоим|price|^sum|бат|baht|฿|thb|потрач|расход|spent|cost|руб/i,
+  p: /цен|price|стоим|за шт|unit/i,
+  q: /кол|qty|шт|quant|count|вес|кг/i,
+  a: /сумм|amount|^sum|бат|baht|฿|thb|потрач|расход|spent|cost|руб/i,
   c: /катег|category|тип|type|статья|групп|group|раздел/i,
   n: /назв|товар|продукт|покупк|что|name|item|product|коммент|опис|note|comment|descr|детал|memo|примеч|где|магаз|shop/i,
 };
+const MON_IN_NAME = [/январ/, /феврал/, /март/, /апрел/, /ма[йя]/, /июн/, /июл/, /август/, /сентябр/, /октябр/, /ноябр/, /декабр/];
+// "Покупки - Ноябрь 2026.csv" → 2026-11-01; otherwise today
+function dateFromName(name) {
+  const s = String(name).toLowerCase();
+  const y = s.match(/20\d\d/), m = MON_IN_NAME.findIndex((r) => r.test(s));
+  return y && m >= 0 ? `${y[0]}-${pad(m + 1)}-01` : today();
+}
+const cellNum = (v) => (v && looksNumber(v) ? parseAmount(v) : null);
 
 function colStats(rows, start) {
-  const data = rows.slice(start, start + 80);
+  const data = rows.slice(start, start + 200);
   const w = rows[0]?.length || 0;
   return Array.from({ length: w }, (_, i) => {
     const vals = data.map((r) => r[i]).filter((v) => v !== "");
     const k = vals.length || 1;
-    const serial = vals.filter((v) => /^\d{5}(\.\d+)?$/.test(v) && parseDate(v)).length / k;
     return {
       filled: vals.length,
       textDate: vals.filter(looksTextDate).length / k,
-      serial,
+      serial: vals.filter((v) => /^\d{5}(\.\d+)?$/.test(v) && parseDate(v)).length / k,
       num: vals.filter(looksNumber).length / k,
-      distinct: new Set(vals.map((v) => v.toLowerCase())).size / k,
+      ones: vals.filter((v) => cellNum(v) === 1).length / k,
     };
   });
 }
-function autoConfig(rows) {
+// Finds three numeric columns where price × quantity = sum in most rows
+function findTriple(rows, start, cols) {
+  const data = rows.slice(start, start + 200);
+  let best = null;
+  for (const k of cols) for (const i of cols) for (const j of cols) {
+    if (i >= j || i === k || j === k) continue;
+    let hit = 0, tot = 0;
+    for (const r of data) {
+      const s = cellNum(r[k]);
+      if (!s) continue;
+      tot++;
+      const x = cellNum(r[i]), y = cellNum(r[j]);
+      if (x != null && y != null && Math.abs(x * y - s) <= Math.max(0.01, Math.abs(s) * 0.005)) hit++;
+    }
+    if (tot >= 3 && hit / tot >= 0.8 && (!best || hit > best.hit)) best = { i, j, k, hit };
+  }
+  return best;
+}
+function autoConfig(rows, name) {
   const r0 = rows[0] || [], r1 = rows[1] || [];
   const header = r0.some((v) => v) && !r0.some((v) => v && (looksNumber(v) || looksTextDate(v))) && (rows.length < 2 || r1.some((v) => looksNumber(v) || looksTextDate(v)));
-  const st = colStats(rows, header ? 1 : 0);
+  const start = header ? 1 : 0;
+  const st = colStats(rows, start);
   const H = header ? r0 : r0.map(() => "");
   const used = new Set();
   const byHdr = (k, ok = () => true) => { const i = H.findIndex((h, n) => h && !used.has(n) && HDR[k].test(h) && ok(n)); if (i >= 0) used.add(i); return i; };
   const best = (score) => { let bi = -1, bs = 0; st.forEach((s, i) => { if (used.has(i) || !s.filled) return; const v = score(s); if (v > bs) { bs = v; bi = i; } }); if (bi >= 0) used.add(bi); return bi; };
   let d = byHdr("d");
-  if (d < 0) d = best((s) => (s.textDate > 0.6 ? 2 + s.textDate : s.serial > 0.8 ? 1 + s.serial : 0));
+  const fullest = Math.max(0, ...st.map((s) => s.filled));
+  // a date column must cover most rows — a lone number like a grand total is not a date
+  if (d < 0) d = best((s) => (s.filled < fullest * 0.5 ? 0 : s.textDate > 0.6 ? 2 + s.textDate : s.serial > 0.8 ? 1 + s.serial : 0));
+  let p = byHdr("p", (n) => st[n].num > 0.5);
+  let q = byHdr("q", (n) => st[n].num > 0.5);
   let a = byHdr("a", (n) => st[n].num > 0.5);
-  let c = byHdr("c");
+  const c = byHdr("c");
   let n = byHdr("n");
-  const numericCols = st.map((s, i) => i).filter((i) => i !== d && i !== n && i !== c && st[i].filled && st[i].num > 0.8 && !(header && /итог|total|всего/i.test(H[i])));
-  const mode = a < 0 && header && numericCols.length >= 2 ? "wide" : "rows";
+  if (p < 0 && q < 0) {
+    const t = findTriple(rows, start, st.map((s, i) => i).filter((i) => !used.has(i) && st[i].num > 0.8));
+    if (t && (a < 0 || a === t.k)) {
+      [q, p] = st[t.i].ones >= st[t.j].ones ? [t.i, t.j] : [t.j, t.i];
+      a = t.k; [p, q, a].forEach((x) => used.add(x));
+    }
+  }
+  const numericCols = st.map((s, i) => i).filter((i) => !used.has(i) && st[i].filled && st[i].num > 0.8 && !(header && /итог|total|всего/i.test(H[i])));
+  const mode = a < 0 && p < 0 && header && numericCols.length >= 2 ? "wide" : "rows";
   if (mode === "rows") {
-    if (a < 0) a = best((s) => (s.num > 0.6 ? s.num : 0));
-    if (c < 0) c = best((s) => (s.num < 0.3 && s.distinct < 0.6 ? 1 - s.distinct : 0));
-    if (n < 0) n = best((s) => (s.num < 0.5 ? 0.1 + s.distinct : 0));
+    if (a < 0 && p < 0) a = best((s) => (s.num > 0.6 ? s.num : 0));
+    if (n < 0) n = best((s) => (s.num < 0.5 ? s.filled : 0)); // the fullest text column
   }
   // Day.month vs month/day: a first part above 12 settles it; otherwise day first
-  const parts = rows.slice(header ? 1 : 0).map((r) => String(r[d] ?? "").match(DATE_RX)).filter(Boolean);
+  const parts = rows.slice(start).map((r) => String(r[d] ?? "").match(DATE_RX)).filter(Boolean);
   const df = parts.some((m) => +m[2] > 12 && +m[1] <= 12) && !parts.some((m) => +m[1] > 12) ? "mdy" : "dmy";
-  return { header, mode, map: { d, a, c, n }, wide: numericCols, df, dfAuto: df, skipDup: true };
+  return { header, mode, map: { d, p, q, a, c, n }, wide: numericCols, df, dfAuto: df, skipDup: true, fixedDate: dateFromName(name), defCat: "other" };
 }
 
 async function handleFile(f) {
@@ -771,7 +839,7 @@ function startMapping(name, sheets) {
   sheets = sheets.filter((s) => s.rows.length);
   if (!sheets.length) { toast("В таблице нет данных"); return; }
   const si = sheets.reduce((b, s, i) => (s.rows.length > sheets[b].rows.length ? i : b), 0);
-  IMP = { name, sheets, si, ...autoConfig(sheets[si].rows) };
+  IMP = { name, sheets, si, ...autoConfig(sheets[si].rows, name) };
   renderImport();
 }
 
@@ -781,32 +849,52 @@ function computeImport() {
   const H = rows[0] || [];
   const ok = [], bad = [];
   let skipped = 0, last = null;
-  if (map.d < 0) return { ok, bad, skipped, error: "Выбери столбец с датой" };
-  if (mode === "rows" && map.a < 0) return { ok, bad, skipped, error: "Выбери столбец с суммой" };
+  const col = (row, k) => (map[k] >= 0 ? row[map[k]] ?? "" : "");
+  if (map.d < 0 && !IMP.fixedDate) return { ok, bad, skipped, error: "Выбери дату" };
+  if (mode === "rows" && map.a < 0 && map.p < 0) return { ok, bad, skipped, error: "Выбери столбец с ценой или суммой" };
   if (mode === "wide" && !IMP.wide.length) return { ok, bad, skipped, error: "Отметь столбцы-категории" };
+  const prevCat = new Map(knownNames().map((x) => [x.n.toLowerCase(), x.c]));
   for (let r = header ? 1 : 0; r < rows.length; r++) {
     const row = rows[r], line = r + 1;
     if (row.some((v) => TOTAL_RX.test(v))) { skipped++; continue; }
-    const dRaw = row[map.d];
-    let d = dRaw ? parseDate(dRaw, df) : null;
-    const amounts = mode === "rows" ? [[row[map.a], map.c >= 0 ? row[map.c] : ""]] : IMP.wide.map((i) => [row[i], header ? H[i] : `Столбец ${colLetter(i)}`]);
-    const has = amounts.some(([v]) => v);
-    if (dRaw && !d) { if (has) bad.push(`Строка ${line}: не понял дату «${dRaw}»`); else skipped++; continue; }
-    if (d) last = d; else d = last; // empty date cell = same day as the row above
+    const name = col(row, "n");
+    const cells = mode === "rows" ? [col(row, "p"), col(row, "a")] : IMP.wide.map((i) => row[i]);
+    const has = cells.some((v) => v && cellNum(v) !== 0);
+    let d = IMP.fixedDate;
+    if (map.d >= 0) {
+      const dRaw = row[map.d];
+      d = dRaw ? parseDate(dRaw, df) : null;
+      if (dRaw && !d) { if (has) bad.push(`Строка ${line}: не понял дату «${dRaw}»`); else skipped++; continue; }
+      if (d) last = d; else d = last; // empty date cell = same day as the row above
+    }
     if (!has) { skipped++; continue; }
     if (!d) { bad.push(`Строка ${line}: нет даты`); continue; }
-    for (const [v, c] of amounts) {
-      if (!v) continue;
-      const a = parseAmount(v);
-      if (a == null || !looksNumber(v)) { bad.push(`Строка ${line}: не понял сумму «${v}»`); continue; }
-      if (a === 0) continue;
-      ok.push({ d, a: Math.abs(a), cat: c, n: map.n >= 0 ? row[map.n] : "" });
+    if (mode === "rows") {
+      const [pRaw, qRaw, aRaw] = [col(row, "p"), col(row, "q"), col(row, "a")];
+      const p = cellNum(pRaw), q = cellNum(qRaw), a = cellNum(aRaw);
+      if (pRaw && p == null) { bad.push(`Строка ${line}: не понял цену «${pRaw}»`); continue; }
+      if (qRaw && q == null) { bad.push(`Строка ${line}: не понял количество «${qRaw}»`); continue; }
+      if (aRaw && a == null) { bad.push(`Строка ${line}: не понял сумму «${aRaw}»`); continue; }
+      const qq = q > 0 ? q : 1;
+      const A = a ? Math.abs(a) : Math.abs(p || 0) * qq; // the sum from the table wins; otherwise price × quantity
+      if (!A) { skipped++; continue; }
+      ok.push({ d, p: r2(p ? Math.abs(p) : A / qq), q: qq, a: r2(A), cat: col(row, "c").trim(), n: name });
+    } else {
+      IMP.wide.forEach((i) => {
+        const v = row[i];
+        if (!v) return;
+        const a = cellNum(v);
+        if (a == null) { bad.push(`Строка ${line}: не понял сумму «${v}»`); return; }
+        if (a) ok.push({ d, p: Math.abs(a), q: 1, a: Math.abs(a), cat: header ? H[i] : `Столбец ${colLetter(i)}`, n: name });
+      });
     }
   }
+  // No category in the table: the category this name had before, otherwise the chosen default
+  ok.forEach((o) => { if (!o.cat) o.catId = prevCat.get(o.n.trim().toLowerCase()) || IMP.defCat; });
   const have = new Set(S.items.map((i) => `${i.d}|${i.a}|${(i.n || "").toLowerCase()}`));
   ok.forEach((o) => { o.dup = have.has(`${o.d}|${o.a}|${o.n.toLowerCase()}`); });
   const known = new Set(S.cats.map((c) => c.n.toLowerCase()));
-  const newCats = [...new Set(ok.map((o) => o.cat.trim()).filter((c) => c && !known.has(c.toLowerCase())))];
+  const newCats = [...new Set(ok.map((o) => o.cat).filter((c) => c && !known.has(c.toLowerCase())))];
   return { ok, bad, skipped, newCats };
 }
 
@@ -818,49 +906,58 @@ function renderImport() {
   const H = rows[0] || [];
   const sample = rows[IMP.header ? 1 : 0] || [];
   const colName = (i) => `${colLetter(i)} · ${(IMP.header ? H[i] : sample[i]) || "пусто"}`.slice(0, 40);
-  const sel = (k, optional) => `<select data-imp="map" data-key="${k}">${optional ? `<option value="-1">— нет —</option>` : `<option value="-1">— выбери —</option>`}${H.map((_, i) => `<option value="${i}" ${IMP.map[k] === i ? "selected" : ""}>${esc(colName(i))}</option>`).join("")}</select>`;
+  const sel = (k, none) => `<select data-imp="map" data-key="${k}"><option value="-1">${none}</option>${H.map((_, i) => `<option value="${i}" ${IMP.map[k] === i ? "selected" : ""}>${esc(colName(i))}</option>`).join("")}</select>`;
   const take = R.ok.filter((o) => !(IMP.skipDup && o.dup));
   const dups = R.ok.filter((o) => o.dup).length;
   const sum = take.reduce((s, o) => s + o.a, 0);
   const dates = take.map((o) => o.d).sort();
+  const rowsMode = IMP.mode === "rows";
 
   let h = head("Загрузить из таблицы") + `<p class="hint">${esc(IMP.name)} · ${rows.length} ${plural(rows.length, "строка", "строки", "строк")}</p>`;
   if (IMP.sheets.length > 1) h += `<label class="field" style="margin-top:14px"><span>Лист</span><select data-imp="sheet">${IMP.sheets.map((s, i) => `<option value="${i}" ${i === IMP.si ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select></label>`;
-  h += `<div class="seg" style="margin-top:14px;background:var(--sunk)"><button data-act="impmode" data-arg="rows" aria-pressed="${IMP.mode === "rows"}">Трата в строке</button><button data-act="impmode" data-arg="wide" aria-pressed="${IMP.mode === "wide"}">Категории в столбцах</button></div>
+  h += `<div class="seg" style="margin-top:14px;background:var(--sunk)"><button data-act="impmode" data-arg="rows" aria-pressed="${rowsMode}">Покупка в строке</button><button data-act="impmode" data-arg="wide" aria-pressed="${!rowsMode}">Категории в столбцах</button></div>
     <label class="check" style="margin-top:8px"><input type="checkbox" data-imp="header" ${IMP.header ? "checked" : ""}> Первая строка — заголовки</label>
-    <div class="grid2"><label class="field"><span>Дата</span>${sel("d")}</label>`;
-  if (IMP.mode === "rows") h += `<label class="field"><span>Сумма</span>${sel("a")}</label><label class="field"><span>Категория</span>${sel("c", true)}</label>`;
-  h += `<label class="field"><span>Название</span>${sel("n", true)}</label>
-    <label class="field"><span>Формат даты</span><select data-imp="df"><option value="dmy" ${IMP.df === "dmy" ? "selected" : ""}>день.месяц${IMP.dfAuto === "dmy" ? " (авто)" : ""}</option><option value="mdy" ${IMP.df === "mdy" ? "selected" : ""}>месяц/день${IMP.dfAuto === "mdy" ? " (авто)" : ""}</option></select></label></div>`;
-  if (IMP.mode === "wide") {
+    <div class="grid2"><label class="field"><span>Название</span>${sel("n", "— нет —")}</label>`;
+  if (rowsMode) h += `<label class="field"><span>Цена</span>${sel("p", "— нет —")}</label><label class="field"><span>Количество</span>${sel("q", "— нет (1 шт) —")}</label><label class="field"><span>Сумма</span>${sel("a", "— цена × кол-во —")}</label>`;
+  h += `<label class="field"><span>Дата</span>${sel("d", "— одна для всех —")}</label>`;
+  h += IMP.map.d >= 0
+    ? `<label class="field"><span>Формат даты</span><select data-imp="df"><option value="dmy" ${IMP.df === "dmy" ? "selected" : ""}>день.месяц${IMP.dfAuto === "dmy" ? " (авто)" : ""}</option><option value="mdy" ${IMP.df === "mdy" ? "selected" : ""}>месяц/день${IMP.dfAuto === "mdy" ? " (авто)" : ""}</option></select></label>`
+    : `<label class="field"><span>Дата для всех строк</span><input type="date" data-imp="fixed" value="${IMP.fixedDate}"></label>`;
+  if (rowsMode) h += `<label class="field"><span>Категория</span>${sel("c", "— нет —")}</label>`;
+  if (rowsMode && IMP.map.c < 0) h += `<label class="field"><span>Категория, если не известна</span><select data-imp="defcat">${S.cats.map((c) => `<option value="${c.id}" ${c.id === IMP.defCat ? "selected" : ""}>${esc(c.e)} ${esc(c.n)}</option>`).join("")}</select></label>`;
+  h += `</div>`;
+  if (rowsMode && IMP.map.c < 0) h += `<p class="hint">Для названий, которые уже встречались, возьмётся их прошлая категория.</p>`;
+  if (!rowsMode) {
     h += `<div class="field" style="margin-top:12px"><span>Столбцы-категории</span><div class="colsel">${H.map((_, i) => i === IMP.map.d || i === IMP.map.n ? "" :
       `<label class="check" style="background:var(--sunk);border-radius:9px;padding:6px 10px;font-size:14px"><input type="checkbox" data-imp="wide" value="${i}" ${IMP.wide.includes(i) ? "checked" : ""}>${esc(IMP.header ? H[i] || colLetter(i) : colLetter(i))}</label>`).join("")}</div></div>`;
   }
   if (R.error) h += `<div class="box"><p>${esc(R.error)}</p></div>`;
   else {
-    h += `<div class="box"><p class="sum">${take.length} ${plural(take.length, "трата", "траты", "трат")} · <span class="num">${fmt(sum)}</span></p>
-      ${dates.length ? `<p class="hint">${dmy(dates[0])} — ${dmy(dates[dates.length - 1])}</p>` : ""}
+    h += `<div class="box"><p class="sum">${take.length} ${plural(take.length, "покупка", "покупки", "покупок")} · <span class="num">${fmt(sum)}</span></p>
+      ${dates.length ? `<p class="hint">${dates[0] === dates[dates.length - 1] ? dmy(dates[0]) : `${dmy(dates[0])} — ${dmy(dates[dates.length - 1])}`}</p>` : ""}
       ${R.newCats.length ? `<p class="hint">Новые категории: ${esc(R.newCats.slice(0, 12).join(", "))}${R.newCats.length > 12 ? "…" : ""}</p>` : ""}
       ${R.skipped ? `<p class="hint">Пропущено пустых и итоговых строк: ${R.skipped}</p>` : ""}
-      ${dups ? `<label class="check"><input type="checkbox" data-imp="dup" ${IMP.skipDup ? "checked" : ""}> Пропустить ${dups} ${plural(dups, "трату", "траты", "трат")}, которые уже есть в приложении</label>` : ""}</div>`;
+      ${dups ? `<label class="check"><input type="checkbox" data-imp="dup" ${IMP.skipDup ? "checked" : ""}> Пропустить ${dups} ${plural(dups, "покупку", "покупки", "покупок")}, которые уже есть в приложении</label>` : ""}</div>`;
     if (R.bad.length) h += `<details class="box warnbox"><summary>Не понял ${R.bad.length} ${plural(R.bad.length, "значение", "значения", "значений")} — они не загрузятся</summary><ul>${R.bad.slice(0, 30).map((b) => `<li>${esc(b)}</li>`).join("")}${R.bad.length > 30 ? "<li>…</li>" : ""}</ul></details>`;
     if (take.length) {
-      h += `<table><thead><tr><th>Дата</th><th>Название</th><th>Категория</th><th class="r">Сумма</th></tr></thead><tbody>${take.slice(0, 8).map((o) =>
-        `<tr><td class="num">${dmy(o.d)}</td><td>${esc(o.n)}</td><td>${esc(o.cat || cat("other").n)}</td><td class="r num">${fmt(o.a)}</td></tr>`).join("")}</tbody></table>
+      h += `<table><thead><tr><th>Название</th><th class="r">Цена × кол-во</th><th class="r">Сумма</th></tr></thead><tbody>${take.slice(0, 8).map((o) =>
+        `<tr><td>${esc(o.n || "—")}<br><span class="hint" style="font-size:12px">${dmy(o.d)} · ${esc(o.cat || cat(o.catId).n)}</span></td><td class="r num">${fmtNum(o.p)} × ${fmtNum(o.q)}</td><td class="r num">${fmt(o.a)}</td></tr>`).join("")}</tbody></table>
         ${take.length > 8 ? `<p class="hint">…и ещё ${take.length - 8}</p>` : ""}`;
     }
   }
-  h += `<div class="stack"><button class="btn primary block" data-act="impdo" ${take.length ? "" : "disabled"}>Загрузить ${take.length} ${plural(take.length, "трату", "траты", "трат")}</button>
+  h += `<div class="stack"><button class="btn primary block" data-act="impdo" ${take.length ? "" : "disabled"}>Загрузить ${take.length} ${plural(take.length, "покупку", "покупки", "покупок")}</button>
     <button class="btn block" data-act="import">Выбрать другую таблицу</button></div>`;
   if (card) { card.innerHTML = h; card.scrollTop = scroll; } else openSheet(h, "tall");
 }
 
 function onImportChange(el) {
   const k = el.dataset.imp;
-  if (k === "sheet") { const si = +el.value; IMP = { ...IMP, si, ...autoConfig(IMP.sheets[si].rows) }; }
+  if (k === "sheet") { const si = +el.value; IMP = { ...IMP, si, ...autoConfig(IMP.sheets[si].rows, IMP.name) }; }
   else if (k === "map") IMP.map[el.dataset.key] = +el.value;
   else if (k === "header") IMP.header = el.checked;
   else if (k === "df") IMP.df = el.value;
+  else if (k === "fixed") IMP.fixedDate = el.value;
+  else if (k === "defcat") IMP.defCat = el.value;
   else if (k === "dup") IMP.skipDup = el.checked;
   else if (k === "wide") { const i = +el.value; IMP.wide = el.checked ? [...IMP.wide, i].sort((a, b) => a - b) : IMP.wide.filter((x) => x !== i); }
   renderImport();
@@ -870,21 +967,20 @@ function doImport() {
   const take = R.ok.filter((o) => !(IMP.skipDup && o.dup));
   if (!take.length) return;
   const byName = new Map(S.cats.map((c) => [c.n.toLowerCase(), c.id]));
-  const catId = (name) => {
-    const n = name.trim();
-    if (!n) return "other";
-    const k = n.toLowerCase();
-    if (!byName.has(k)) { const id = "c" + uid(); S.cats.push({ id, e: "🏷️", n }); byName.set(k, id); }
+  const catId = (o) => {
+    if (!o.cat) return o.catId;
+    const k = o.cat.toLowerCase();
+    if (!byName.has(k)) { const id = "c" + uid(); S.cats.push({ id, e: "🏷️", n: o.cat }); byName.set(k, id); }
     return byName.get(k);
   };
   const id = uid(), now = Date.now();
-  take.forEach((o, n) => S.items.push({ id: uid() + n, d: o.d, a: o.a, c: catId(o.cat), n: o.n, t: now + n, imp: id }));
+  take.forEach((o, n) => S.items.push({ id: uid() + n, d: o.d, p: o.p, q: o.q, a: o.a, c: catId(o), n: o.n, t: now + n, imp: id }));
   S.imports.push({ id, ts: now, name: IMP.name, count: take.length });
   save();
   U.month = take.map((o) => o.d).sort().pop().slice(0, 7);
-  U.view = "list"; U.cat = null;
+  U.view = "list"; U.cat = null; U.name = null;
   closeSheet(); render();
-  toast(`Загружено: ${take.length} ${plural(take.length, "трата", "траты", "трат")}`);
+  toast(`Загружено: ${take.length} ${plural(take.length, "покупка", "покупки", "покупок")}`);
 }
 
 // ---------- Toast ----------
@@ -900,13 +996,15 @@ function toast(msg, action, fn) {
 
 // ---------- Events ----------
 const ACT = {
-  view: (v) => { U.view = v; U.tip = null; if (v !== "list") U.cat = null; render(); scrollTo(0, 0); },
+  view: (v) => { U.view = v; U.tip = null; if (v !== "list") { U.cat = null; U.name = null; } render(); scrollTo(0, 0); },
   prev: () => { U.month = shiftMonth(U.month, periodKey().length === 4 ? -12 : -1); U.tip = null; render(); },
   next: () => { U.month = shiftMonth(U.month, periodKey().length === 4 ? 12 : 1); U.tip = null; render(); },
   mode: (m) => { U.mode = m; U.tip = null; render(); },
   tip: (k) => { U.tip = U.tip === k ? null : k; render(); },
-  catfilter: (id) => { U.cat = id; U.view = "list"; if (U.mode === "year") U.mode = "month"; render(); scrollTo(0, 0); },
-  clearcat: () => { U.cat = null; render(); },
+  group: (g) => { U.group = g; render(); },
+  namefilter: (k) => { U.name = k; U.cat = null; U.view = "list"; if (U.mode === "year") U.mode = "month"; render(); scrollTo(0, 0); },
+  catfilter: (id) => { U.cat = id; U.name = null; U.view = "list"; if (U.mode === "year") U.mode = "month"; render(); scrollTo(0, 0); },
+  clearcat: () => { U.cat = null; U.name = null; render(); },
   add: () => openForm(null),
   edit: (id) => openForm(id),
   pick: (id) => { F.catTouched = true; setCat(id); },
@@ -955,7 +1053,8 @@ document.addEventListener("change", (e) => { if (e.target.dataset.imp) onImportC
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#sheet").hidden) closeSheet();
   if (e.key === "Enter" && F && e.target.id === "fN") { e.preventDefault(); $("#fS").innerHTML = ""; $("#fA").focus(); }
-  if (e.key === "Enter" && F && e.target.id === "fA") { e.preventDefault(); saveForm(false); }
+  if (e.key === "Enter" && F && e.target.id === "fA") { e.preventDefault(); $("#fQ").focus(); }
+  if (e.key === "Enter" && F && e.target.id === "fQ") { e.preventDefault(); saveForm(false); }
 });
 // Desktop: hovering a chart column shows its value
 document.addEventListener("pointerover", (e) => {

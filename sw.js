@@ -1,7 +1,7 @@
 // Offline support. The page itself: network first (so updates show up on the next open),
 // falling back to the cached copy when offline or after 3 s. Other files: cache first, refreshed in the background.
 // Bump VERSION when releasing changes so old caches are cleared.
-const VERSION = "traty-v2";
+const VERSION = "traty-v3";
 const SHELL = [
   "./",
   "index.html",
