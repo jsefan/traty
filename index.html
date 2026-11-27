@@ -93,6 +93,13 @@ h3{font-size:13px;font-weight:650;color:var(--muted);text-transform:uppercase;le
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
 .shead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
 .x{width:34px;height:34px;border-radius:50%;background:var(--sunk);color:var(--muted);display:grid;place-items:center;font-size:14px;flex:none}
+.entry{display:grid;grid-template-columns:minmax(0,1fr) 34%;gap:10px;margin-top:6px}
+.entry input{font-size:20px;font-weight:600;padding:13px 14px}
+input.bad{outline:2px solid var(--warn);outline-offset:-1px}
+.sug{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.sug:empty{display:none}
+.sug button{background:var(--accent-soft);color:var(--accent);border-radius:9px;padding:7px 11px;font-size:14px;font-weight:600}
+.sug small{color:var(--muted);font-weight:500;margin-left:4px}
 .amt{display:flex;align-items:baseline;justify-content:center;gap:6px;padding:10px 0 14px}
 .amt input{background:none;border:0;font-size:44px;font-weight:750;text-align:center;padding:0;width:6.5ch;letter-spacing:-.02em}
 .amt input:focus{outline:0}
@@ -183,7 +190,7 @@ td.r,th.r{text-align:right;padding-right:0;white-space:nowrap}
 
 <script>
 "use strict";
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const KEY = "traty-v1";
 const DEFAULT_CATS = [
   ["food", "🛒", "Продукты"], ["cafe", "🍜", "Кафе"], ["transport", "🛵", "Транспорт"],
@@ -419,33 +426,79 @@ function closeSheet() {
 }
 const head = (title) => `<div class="shead"><h2>${esc(title)}</h2><button class="x" data-act="close" aria-label="Закрыть">✕</button></div>`;
 
-// Add / edit expense
+// Add / edit expense: name ("Брокколи") + price come first, category second
 let F = null;
-function openForm(id) {
-  const it = id ? S.items.find((i) => i.id === id) : null;
-  const defDate = U.month === today().slice(0, 7) ? today() : `${U.month}-01`;
-  F = { id: it?.id || null, c: it?.c || (S.cats.some((c) => c.id === S.lastCat) ? S.lastCat : "other") };
-  openSheet(`${head(it ? "Трата" : "Новая трата")}
-    <div class="amt" id="amtWrap"><input id="fA" class="num" inputmode="decimal" autocomplete="off" placeholder="0" value="${it ? esc(String(it.a).replace(".", ",")) : ""}" aria-label="Сумма"><span>฿</span></div>
-    <div class="chips" id="fC">${S.cats.map((c) => `<button data-act="pick" data-arg="${c.id}" aria-pressed="${c.id === F.c}">${esc(c.e)} ${esc(c.n)}</button>`).join("")}</div>
-    <div class="row2"><input type="date" id="fD" value="${it?.d || defDate}" aria-label="Дата"><input id="fN" placeholder="Комментарий" value="${esc(it?.n || "")}" autocomplete="off" enterkeyhint="done"></div>
-    <div class="stack"><button class="btn primary block" data-act="save">Сохранить</button>
-    ${it ? `<button class="btn danger block" data-act="del">Удалить</button>` : ""}</div>`);
-  const a = $("#fA");
-  a.focus();
-  a.addEventListener("input", () => $("#amtWrap").classList.remove("bad"));
+// Past names, most used first, with the category used last time and the last price
+function knownNames() {
+  const m = new Map();
+  S.items.slice().sort((a, b) => (a.t || 0) - (b.t || 0)).forEach((i) => {
+    const n = (i.n || "").trim();
+    if (!n) return;
+    const k = n.toLowerCase();
+    const e = m.get(k) || { n, count: 0 };
+    e.count++; e.c = i.c; e.a = i.a; e.n = n;
+    m.set(k, e);
+  });
+  return [...m.values()].sort((a, b) => b.count - a.count);
 }
-function saveForm() {
-  const a = parseAmount($("#fA").value);
-  if (!(a > 0)) { $("#amtWrap").classList.add("bad"); $("#fA").focus(); return; }
-  const d = $("#fD").value || today();
+function openForm(id, keep) {
+  const it = id ? S.items.find((i) => i.id === id) : null;
+  const defDate = keep?.d || (U.month === today().slice(0, 7) ? today() : `${U.month}-01`);
+  F = { id: it?.id || null, c: it?.c || keep?.c || (S.cats.some((c) => c.id === S.lastCat) ? S.lastCat : "other"), names: knownNames(), catTouched: !!it };
+  openSheet(`${head(it ? "Трата" : "Новая трата")}
+    <div class="entry">
+      <label class="field"><span>Название</span><input id="fN" placeholder="Например, брокколи" value="${esc(it?.n || "")}" autocomplete="off" autocapitalize="sentences" enterkeyhint="next"></label>
+      <label class="field"><span>Цена, ฿</span><input id="fA" class="num" inputmode="decimal" autocomplete="off" placeholder="0" value="${it ? esc(String(it.a).replace(".", ",")) : ""}" enterkeyhint="done"></label>
+    </div>
+    <div class="sug" id="fS"></div>
+    <div class="field" style="margin-top:14px"><span>Категория</span></div>
+    <div class="chips" id="fC" style="margin-top:6px">${S.cats.map((c) => `<button data-act="pick" data-arg="${c.id}" aria-pressed="${c.id === F.c}">${esc(c.e)} ${esc(c.n)}</button>`).join("")}</div>
+    <label class="field" style="margin-top:14px"><span>Дата</span><input type="date" id="fD" value="${it?.d || defDate}"></label>
+    <div class="stack"><button class="btn primary block" data-act="save">Сохранить</button>
+    ${it ? `<button class="btn danger block" data-act="del">Удалить</button>` : `<button class="btn block" data-act="savemore">Сохранить и добавить ещё</button>`}</div>
+    ${keep ? `<p class="hint" style="text-align:center;margin-top:10px">Добавлено: ${keep.count} · ${fmt(keep.sum)}</p>` : ""}`);
+  F.keep = keep || null;
+  const n = $("#fN");
+  n.focus();
+  n.addEventListener("input", () => { n.classList.remove("bad"); showSug(); });
+  $("#fA").addEventListener("input", () => $("#fA").classList.remove("bad"));
+}
+function showSug() {
+  const q = $("#fN").value.trim().toLowerCase();
+  const box = $("#fS");
+  if (!q) { box.innerHTML = ""; return; }
+  const list = F.names.filter((x) => x.n.toLowerCase() !== q && x.n.toLowerCase().includes(q))
+    .sort((a, b) => (b.n.toLowerCase().startsWith(q) - a.n.toLowerCase().startsWith(q)) || b.count - a.count).slice(0, 5);
+  box.innerHTML = list.map((x) => `<button data-act="sug" data-arg="${esc(x.n)}">${esc(x.n)} <small>${fmt(x.a)}</small></button>`).join("");
+  // Exact match typed by hand: take its usual category unless the user already chose one
+  const exact = F.names.find((x) => x.n.toLowerCase() === q);
+  if (exact && !F.catTouched) setCat(exact.c);
+}
+function setCat(id) {
+  F.c = id;
+  document.querySelectorAll("#fC button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.arg === id));
+}
+function pickSug(name) {
+  const x = F.names.find((v) => v.n === name);
+  $("#fN").value = name;
+  $("#fS").innerHTML = "";
+  if (x) { if (!F.catTouched) setCat(x.c); }
+  $("#fA").focus();
+}
+function saveForm(more) {
   const n = $("#fN").value.trim();
+  const a = parseAmount($("#fA").value);
+  if (!n && !F.id) { $("#fN").classList.add("bad"); $("#fN").focus(); return; }
+  if (!(a > 0)) { $("#fA").classList.add("bad"); $("#fA").focus(); return; }
+  const d = $("#fD").value || today();
   if (F.id) Object.assign(S.items.find((i) => i.id === F.id), { a, d, c: F.c, n });
   else S.items.push({ id: uid(), d, a, c: F.c, n, t: Date.now() });
   S.lastCat = F.c;
   save();
   U.month = d.slice(0, 7);
+  const keep = more ? { d, c: F.c, count: (F.keep?.count || 0) + 1, sum: (F.keep?.sum || 0) + a } : null;
   closeSheet(); render();
+  if (keep) openForm(null, keep);
 }
 function deleteItem() {
   const k = S.items.findIndex((i) => i.id === F.id);
@@ -504,9 +557,9 @@ async function saveFile(name, text, type) {
 function exportCsv(items, name) {
   if (!items.length) { toast("Нечего выгружать — трат нет"); return; }
   const q = (s) => /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  const lines = ["Дата;Категория;Сумма;Комментарий"];
+  const lines = ["Дата;Название;Категория;Сумма"];
   items.slice().sort((a, b) => a.d.localeCompare(b.d) || (a.t || 0) - (b.t || 0))
-    .forEach((i) => lines.push([dmy(i.d), q(cat(i.c).n), String(i.a).replace(".", ","), q(i.n || "")].join(";")));
+    .forEach((i) => lines.push([dmy(i.d), q(i.n || ""), q(cat(i.c).n), String(i.a).replace(".", ",")].join(";")));
   // BOM + semicolons + decimal comma: opens correctly in Excel with Russian settings
   saveFile(name, "﻿" + lines.join("\r\n") + "\r\n", "text/csv;charset=utf-8");
 }
@@ -519,11 +572,11 @@ const colIndex = (ref) => { let n = 0; for (const ch of ref.replace(/\d+$/, ""))
 function openImport() {
   IMP = null;
   openSheet(`${head("Загрузить из таблицы")}
-    <p class="hint">Файл CSV или Excel (.xlsx) — из Excel, Google Таблиц или Numbers (там: Экспорт → Excel или CSV). Ожидается одна трата на строку с датой и суммой; если у тебя категории разнесены по столбцам — тоже подойдёт.</p>
+    <p class="hint">Файл CSV или Excel (.xlsx) — из Excel, Google Таблиц или Numbers (там: Экспорт → Excel или CSV). Ожидается одна трата на строку: дата, название и цена (категория — по желанию); если у тебя категории разнесены по столбцам — тоже подойдёт.</p>
     <div class="stack"><button class="btn primary block" data-act="impfile">Выбрать файл</button></div>
     <h3>Или вставь ячейки</h3>
     <p class="hint" style="margin:0 4px 8px">Выдели в таблице нужные строки вместе с заголовками, скопируй и вставь сюда.</p>
-    <textarea id="impPaste" placeholder="Дата	Категория	Сумма	Комментарий"></textarea>
+    <textarea id="impPaste" placeholder="Дата	Название	Категория	Сумма"></textarea>
     <div class="stack"><button class="btn block" data-act="imppaste">Разобрать вставленное</button></div>`, "tall");
 }
 
@@ -658,7 +711,7 @@ const HDR = {
   d: /дат|date|день|day|когда|число/i,
   a: /сумм|amount|цен|стоим|price|^sum|бат|baht|฿|thb|потрач|расход|spent|cost|руб/i,
   c: /катег|category|тип|type|статья|групп|group|раздел/i,
-  n: /коммент|опис|note|comment|descr|что|назв|name|товар|item|детал|memo|примеч|где|магаз|shop/i,
+  n: /назв|товар|продукт|покупк|что|name|item|product|коммент|опис|note|comment|descr|детал|memo|примеч|где|магаз|shop/i,
 };
 
 function colStats(rows, start) {
@@ -777,7 +830,7 @@ function renderImport() {
     <label class="check" style="margin-top:8px"><input type="checkbox" data-imp="header" ${IMP.header ? "checked" : ""}> Первая строка — заголовки</label>
     <div class="grid2"><label class="field"><span>Дата</span>${sel("d")}</label>`;
   if (IMP.mode === "rows") h += `<label class="field"><span>Сумма</span>${sel("a")}</label><label class="field"><span>Категория</span>${sel("c", true)}</label>`;
-  h += `<label class="field"><span>Комментарий</span>${sel("n", true)}</label>
+  h += `<label class="field"><span>Название</span>${sel("n", true)}</label>
     <label class="field"><span>Формат даты</span><select data-imp="df"><option value="dmy" ${IMP.df === "dmy" ? "selected" : ""}>день.месяц${IMP.dfAuto === "dmy" ? " (авто)" : ""}</option><option value="mdy" ${IMP.df === "mdy" ? "selected" : ""}>месяц/день${IMP.dfAuto === "mdy" ? " (авто)" : ""}</option></select></label></div>`;
   if (IMP.mode === "wide") {
     h += `<div class="field" style="margin-top:12px"><span>Столбцы-категории</span><div class="colsel">${H.map((_, i) => i === IMP.map.d || i === IMP.map.n ? "" :
@@ -792,8 +845,8 @@ function renderImport() {
       ${dups ? `<label class="check"><input type="checkbox" data-imp="dup" ${IMP.skipDup ? "checked" : ""}> Пропустить ${dups} ${plural(dups, "трату", "траты", "трат")}, которые уже есть в приложении</label>` : ""}</div>`;
     if (R.bad.length) h += `<details class="box warnbox"><summary>Не понял ${R.bad.length} ${plural(R.bad.length, "значение", "значения", "значений")} — они не загрузятся</summary><ul>${R.bad.slice(0, 30).map((b) => `<li>${esc(b)}</li>`).join("")}${R.bad.length > 30 ? "<li>…</li>" : ""}</ul></details>`;
     if (take.length) {
-      h += `<table><thead><tr><th>Дата</th><th>Категория</th><th>Комментарий</th><th class="r">Сумма</th></tr></thead><tbody>${take.slice(0, 8).map((o) =>
-        `<tr><td class="num">${dmy(o.d)}</td><td>${esc(o.cat || cat("other").n)}</td><td>${esc(o.n)}</td><td class="r num">${fmt(o.a)}</td></tr>`).join("")}</tbody></table>
+      h += `<table><thead><tr><th>Дата</th><th>Название</th><th>Категория</th><th class="r">Сумма</th></tr></thead><tbody>${take.slice(0, 8).map((o) =>
+        `<tr><td class="num">${dmy(o.d)}</td><td>${esc(o.n)}</td><td>${esc(o.cat || cat("other").n)}</td><td class="r num">${fmt(o.a)}</td></tr>`).join("")}</tbody></table>
         ${take.length > 8 ? `<p class="hint">…и ещё ${take.length - 8}</p>` : ""}`;
     }
   }
@@ -856,8 +909,10 @@ const ACT = {
   clearcat: () => { U.cat = null; render(); },
   add: () => openForm(null),
   edit: (id) => openForm(id),
-  pick: (id) => { F.c = id; document.querySelectorAll("#fC button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.arg === id)); },
-  save: saveForm,
+  pick: (id) => { F.catTouched = true; setCat(id); },
+  sug: (name) => pickSug(name),
+  save: () => saveForm(false),
+  savemore: () => saveForm(true),
   del: deleteItem,
   close: closeSheet,
   catedit: (id) => openCat(id),
@@ -899,7 +954,8 @@ document.addEventListener("click", (e) => {
 document.addEventListener("change", (e) => { if (e.target.dataset.imp) onImportChange(e.target); });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#sheet").hidden) closeSheet();
-  if (e.key === "Enter" && F && (e.target.id === "fA" || e.target.id === "fN")) { e.preventDefault(); saveForm(); }
+  if (e.key === "Enter" && F && e.target.id === "fN") { e.preventDefault(); $("#fS").innerHTML = ""; $("#fA").focus(); }
+  if (e.key === "Enter" && F && e.target.id === "fA") { e.preventDefault(); saveForm(false); }
 });
 // Desktop: hovering a chart column shows its value
 document.addEventListener("pointerover", (e) => {
