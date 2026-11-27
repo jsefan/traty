@@ -195,12 +195,12 @@ td.r,th.r{text-align:right;padding-right:0;white-space:nowrap}
 
 <script>
 "use strict";
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 const KEY = "traty-v1";
 const DEFAULT_CATS = [
   ["food", "🛒", "Продукты"], ["cafe", "🍜", "Кафе"], ["transport", "🛵", "Транспорт"],
   ["home", "🏠", "Жильё"], ["bills", "💡", "Связь и счета"], ["health", "💊", "Здоровье"],
-  ["shop", "🛍️", "Покупки"], ["fun", "🎉", "Развлечения"], ["travel", "✈️", "Поездки"],
+  ["shop", "🛍️", "Покупки"], ["fun", "🎉", "Развлечения"], ["travel", "✈️", "Поездки"], ["pets", "🐾", "Питомцы"], ["household", "🧽", "Хозтовары"],
   ["other", "📦", "Другое"],
 ];
 const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
@@ -218,7 +218,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
 
 // ---------- Storage ----------
 function freshState() {
-  return { v: 1, cats: DEFAULT_CATS.map(([id, e, n]) => ({ id, e, n })), items: [], imports: [], lastCat: "food" };
+  return { v: 1, cats: DEFAULT_CATS.map(([id, e, n]) => ({ id, e, n })), items: [], imports: [], lastCat: "food", m: AUTO_CATS.map((a) => a.id) };
 }
 function load() {
   try {
@@ -227,8 +227,30 @@ function load() {
   } catch (e) { /* broken storage: start fresh */ }
   return freshState();
 }
+// Categories recognised from the item name. Each is added once to older saved data,
+// and matching purchases sitting in "Другое" move into it.
+// The patterns avoid look-alikes: "котлеты", "скотч", "кошелёк".
+const AUTO_CATS = [
+  { id: "pets", e: "🐾", n: "Питомцы", rx: /(^|[^а-яё])(кош(?!ел)|кот(?!лет)|котён|корм|питом|собак|пёс|щен|ветерин|ветклин|наполнит|лоток|когтеточ)|(pets?|cats?|dogs?)/i },
+  { id: "household", e: "🧽", n: "Хозтовары", rx: /(^|[^а-яё])(хоз|бытов|моющ|мыло|порош|губк|чистящ|стирк|отбел|кондиционер для бел|туалетн|салфет|пакет|мешк|швабр|тряпк|посуд|сковород|кастрюл|фольг|пищев.{0,3}плён|батарейк|лампоч)/i },
+];
+const guessCat = (name) => AUTO_CATS.find((a) => a.rx.test(name || "") && S.cats.some((c) => c.id === a.id))?.id || null;
 function normalize(s) {
   s.imports = Array.isArray(s.imports) ? s.imports : [];
+  s.m = Array.isArray(s.m) ? s.m : [];
+  for (const a of AUTO_CATS) {
+    if (s.m.includes(a.id)) continue;
+    const same = s.cats.find((c) => c.n.toLowerCase() === a.n.toLowerCase());
+    if (same && same.id !== a.id) { // the user already made such a category: adopt it
+      s.items.forEach((i) => { if (i.c === same.id) i.c = a.id; });
+      same.id = a.id;
+    } else if (!same) {
+      const k = s.cats.findIndex((c) => c.id === "other");
+      s.cats.splice(k < 0 ? s.cats.length : k, 0, { id: a.id, e: a.e, n: a.n });
+    }
+    s.items.forEach((i) => { if (i.c === "other" && a.rx.test(i.n || "")) i.c = a.id; });
+    s.m.push(a.id);
+  }
   if (!s.cats.some((c) => c.id === "other")) s.cats.push({ id: "other", e: "📦", n: "Другое" });
   const ids = new Set(s.cats.map((c) => c.id));
   s.items.forEach((i) => { if (!ids.has(i.c)) i.c = "other"; });
@@ -479,6 +501,7 @@ function openForm(id, keep) {
     ${it ? `<button class="btn danger block" data-act="del">Удалить</button>` : `<button class="btn block" data-act="savemore">Сохранить и добавить ещё</button>`}</div>
     ${keep ? `<p class="hint" style="text-align:center;margin-top:10px">Добавлено: ${keep.count} · ${fmt(keep.sum)}</p>` : ""}`);
   F.keep = keep || null;
+  F.baseC = F.c; // the guess from the name falls back to this when the name stops matching
   const n = $("#fN");
   n.focus();
   n.addEventListener("input", () => { n.classList.remove("bad"); showSug(); });
@@ -501,7 +524,7 @@ function showSug() {
   box.innerHTML = list.map((x) => `<button data-act="sug" data-arg="${esc(x.n)}">${esc(x.n)} <small>${fmt(x.a)}</small></button>`).join("");
   // Exact match typed by hand: take its usual category unless the user already chose one
   const exact = F.names.find((x) => x.n.toLowerCase() === q);
-  if (exact && !F.catTouched) setCat(exact.c);
+  if (!F.catTouched) setCat((exact ? exact.c : guessCat(q)) || F.baseC);
 }
 function setCat(id) {
   F.c = id;
@@ -890,7 +913,7 @@ function computeImport() {
     }
   }
   // No category in the table: the category this name had before, otherwise the chosen default
-  ok.forEach((o) => { if (!o.cat) o.catId = prevCat.get(o.n.trim().toLowerCase()) || IMP.defCat; });
+  ok.forEach((o) => { if (!o.cat) o.catId = prevCat.get(o.n.trim().toLowerCase()) || guessCat(o.n) || IMP.defCat; });
   const have = new Set(S.items.map((i) => `${i.d}|${i.a}|${(i.n || "").toLowerCase()}`));
   ok.forEach((o) => { o.dup = have.has(`${o.d}|${o.a}|${o.n.toLowerCase()}`); });
   const known = new Set(S.cats.map((c) => c.n.toLowerCase()));
