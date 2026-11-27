@@ -195,7 +195,7 @@ td.r,th.r{text-align:right;padding-right:0;white-space:nowrap}
 
 <script>
 "use strict";
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.6.1";
 const KEY = "traty-v1";
 const DEFAULT_CATS = [
   ["food", "🛒", "Продукты"], ["cafe", "🍜", "Кафе"], ["transport", "🛵", "Транспорт"],
@@ -668,7 +668,7 @@ function parseDelimited(text) {
   return cleanRows(rows);
 }
 function cleanRows(rows) {
-  const out = Array.from(rows, (r) => Array.from(r || [], (v) => String(v ?? "").trim()))
+  const out = Array.from(rows, (r) => Array.from(r || [], (v) => String(v ?? "").normalize("NFC").trim()))
     .filter((r) => r.some((v) => v !== ""));
   const w = Math.max(0, ...out.map((r) => r.length));
   out.forEach((r) => { while (r.length < w) r.push(""); });
@@ -780,7 +780,8 @@ const HDR = {
 const MON_IN_NAME = [/январ/, /феврал/, /март/, /апрел/, /ма[йя]/, /июн/, /июл/, /август/, /сентябр/, /октябр/, /ноябр/, /декабр/];
 // "Покупки - Ноябрь 2026.csv" → 2026-11-01; otherwise today
 function dateFromName(name) {
-  const s = String(name).toLowerCase();
+  // iPhone file names keep "й"/"ё" decomposed (и + ˘), which breaks /ма[йя]/: compose them first
+  const s = String(name).normalize("NFC").toLowerCase();
   const y = s.match(/20\d\d/), m = MON_IN_NAME.findIndex((r) => r.test(s));
   return y && m >= 0 ? `${y[0]}-${pad(m + 1)}-01` : today();
 }
@@ -871,6 +872,7 @@ function startMapping(name, sheets) {
   sheets = sheets.filter((s) => s.rows.length);
   if (!sheets.length) { toast("В таблице нет данных"); return; }
   const si = sheets.reduce((b, s, i) => (s.rows.length > sheets[b].rows.length ? i : b), 0);
+  name = String(name).normalize("NFC");
   IMP = { name, sheets, si, ...autoConfig(sheets[si].rows, name) };
   renderImport();
 }
